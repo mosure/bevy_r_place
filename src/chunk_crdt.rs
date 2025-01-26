@@ -10,21 +10,23 @@ use bevy::{
         },
     },
 };
-    use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
+
 
 pub const CHUNK_SIZE: u32 = 64;
-pub const WORLD_WIDTH: u32 = 512;
-pub const WORLD_HEIGHT: u32 = 512;
+pub const WORLD_WIDTH: u32 = 2048;
+pub const WORLD_HEIGHT: u32 = 2048;
 pub const CHUNKS_X: u32 = WORLD_WIDTH / CHUNK_SIZE;
 pub const CHUNKS_Y: u32 = WORLD_HEIGHT / CHUNK_SIZE;
+
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Pixel {
     pub r: u8,
     pub g: u8,
     pub b: u8,
-    pub timestamp: u64,  // last-writer-wins
-    pub owner: [u8; 32], // store a PeerId in raw bytes
+    pub timestamp: u64,
+    pub owner: [u8; 32],
 }
 
 impl Default for Pixel {

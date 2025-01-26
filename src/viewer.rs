@@ -74,7 +74,7 @@ pub fn local_input_system(
             let x = x as u32;
             let y = y as u32;
 
-            let color = color_picker.color();
+            let color = color_picker.color.to_srgba().to_u8_array_no_alpha();
 
             // TODO: peer_id tracking
             let owner = [0; 32];
@@ -83,9 +83,9 @@ pub fn local_input_system(
             let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
 
             let pixel = Pixel {
-                r: color.0,
-                g: color.1,
-                b: color.2,
+                r: color[0],
+                g: color[1],
+                b: color[2],
                 timestamp,
                 owner,
             };
@@ -94,9 +94,9 @@ pub fn local_input_system(
             let msg = PixelUpdateMsg {
                 x,
                 y,
-                r: color.0,
-                g: color.1,
-                b: color.2,
+                r: color[0],
+                g: color[1],
+                b: color[2],
                 timestamp,
                 owner,
             };

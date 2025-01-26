@@ -42,18 +42,21 @@ viewer = [
 native = [
   "libp2p-webrtc",
   "libp2p-webrtc/tokio",
+  "libp2p-webrtc/pem",
   "tokio/rt-multi-thread",
   "winit",
 ]
 web = [
   "libp2p-webrtc",
+  "libp2p/websocket-websys",
+  "libp2p/webtransport-websys",
   "tokio/rt",
 ]
 
 
 [dependencies]
 async-channel = "2.3"
-bevy-inspector-egui = "0.28"
+bevy-inspector-egui = "0.29"
 bevy_pancam = { version = "0.17", features = ["bevy_egui"] }
 libp2p-webrtc = { version = "0.9.0-alpha", optional = true }
 rand = "0.8"
@@ -86,6 +89,7 @@ version = "0.55"
 features = [
   "async-std",
   "dns",
+  "ed25519",
   "mdns",
   "floodsub",
   "gossipsub",
@@ -93,11 +97,17 @@ features = [
   "kad",
   "macros",
   "mdns",
+  "memory-connection-limits",
   "noise",
   "ping",
   "quic",
+  "relay",
+  "request-response",
+  "rsa",
+  "serde",
   "tcp",
   "tokio",
+  "websocket",
   "yamux",
 ]
 

@@ -94,10 +94,15 @@ mod native {
     use libp2p::{
         futures::StreamExt,
         gossipsub,
+        identify,
+        kad,
         mdns,
+        memory_connection_limits,
         multiaddr::Protocol,
         Multiaddr,
         PeerId,
+        relay,
+        StreamProtocol,
         swarm::{NetworkBehaviour, SwarmEvent},
         SwarmBuilder,
         tcp,
@@ -121,29 +126,14 @@ mod native {
 
 
     #[derive(NetworkBehaviour)]
-    #[behaviour(out_event = "BevyPlaceBehaviorEvent")]
     pub struct BevyPlaceBehavior {
         pub gossipsub: gossipsub::Behaviour,
+        pub identify: identify::Behaviour,
+        pub kademlia: kad::Behaviour<kad::store::MemoryStore>,
+        pub limits: memory_connection_limits::Behaviour,
         pub mdns: mdns::tokio::Behaviour,
+        pub relay: relay::Behaviour,
     }
-
-    #[allow(clippy::large_enum_variant)]
-    pub enum BevyPlaceBehaviorEvent {
-        Gossipsub(gossipsub::Event),
-        Mdns(mdns::Event),
-    }
-
-    impl From<gossipsub::Event> for BevyPlaceBehaviorEvent {
-        fn from(ev: gossipsub::Event) -> Self {
-            BevyPlaceBehaviorEvent::Gossipsub(ev)
-        }
-    }
-    impl From<mdns::Event> for BevyPlaceBehaviorEvent {
-        fn from(ev: mdns::Event) -> Self {
-            BevyPlaceBehaviorEvent::Mdns(ev)
-        }
-    }
-
 
     pub async fn run_swarm_task(mut node: BevyPlaceNode) {
         loop {
@@ -292,6 +282,8 @@ mod native {
             )?
             .with_quic()
             .with_behaviour(|key| {
+                let local_peer_id = key.public().to_peer_id();
+
                 let message_id_fn = |message: &gossipsub::Message| {
                     let mut hasher = DefaultHasher::new();
                     message.data.hash(&mut hasher);
@@ -310,12 +302,45 @@ mod native {
                     gossipsub_config,
                 )?;
 
+                let identify = identify::Behaviour::new(
+                    identify::Config::new("/ipfs/0.1.0".into(), key.public())
+                        .with_interval(Duration::from_secs(60)),
+                );
+
+                let kad_config = kad::Config::new(
+                    StreamProtocol::new("/ipfs/kad/1.0.0"),
+                );
+                let kad_store = kad::store::MemoryStore::new(local_peer_id);
+                let kademlia = kad::Behaviour::with_config(
+                    local_peer_id,
+                    kad_store,
+                    kad_config,
+                );
+
+                let limits = memory_connection_limits::Behaviour::with_max_percentage(0.9);
+
                 let mdns = mdns::tokio::Behaviour::new(
                     mdns::Config::default(),
                     key.public().to_peer_id(),
                 )?;
 
-                Ok(BevyPlaceBehavior { gossipsub, mdns })
+                let relay = relay::Behaviour::new(
+                    local_peer_id,
+                    relay::Config {
+                        max_reservations_per_peer: 100,
+                        max_circuits_per_peer: 100,
+                        ..Default::default()
+                    },
+                );
+
+                Ok(BevyPlaceBehavior {
+                    gossipsub,
+                    identify,
+                    kademlia,
+                    limits,
+                    mdns,
+                    relay,
+                })
             })?
             .build();
 
