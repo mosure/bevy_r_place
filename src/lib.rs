@@ -3,6 +3,7 @@ pub mod color_picker;
 pub mod headless;
 pub mod network;
 pub mod viewer;
+pub mod window_icon;
 
 pub use libp2p::PeerId;
 

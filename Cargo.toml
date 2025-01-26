@@ -39,9 +39,11 @@ viewer = [
   "bevy/bevy_gizmos",
 ]
 
-# TODO: headless client should also support webrtc transport
 native = [
+  "libp2p-webrtc",
+  "libp2p-webrtc/tokio",
   "tokio/rt-multi-thread",
+  "winit",
 ]
 web = [
   "libp2p-webrtc",
@@ -57,7 +59,8 @@ libp2p-webrtc = { version = "0.9.0-alpha", optional = true }
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1", features = ["macros", "time"] }
+tokio = { version = "1", features = ["macros"] }
+winit = { version = "0.30", optional = true }
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -74,6 +77,7 @@ features = [
   "bevy_render",
   "bevy_ui",
   "bevy_winit",
+  "png",
   "x11",
 ]
 

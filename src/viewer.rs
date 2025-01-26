@@ -20,6 +20,7 @@ use crate::{
         ColorPickerPlugin,
     },
     network::PixelUpdateMsg,
+    window_icon::WindowIconPlugin,
 };
 
 
@@ -120,6 +121,10 @@ fn setup_ui(
             hdr: true,
             ..default()
         },
+        OrthographicProjection {
+            scale: 0.125,
+            ..OrthographicProjection::default_2d()
+        },
         PanCam {
             grab_buttons: vec![MouseButton::Middle, MouseButton::Right],
             ..default()
@@ -174,6 +179,7 @@ impl Plugin for ViewerPlugin {
             )
             .add_plugins(ColorPickerPlugin)
             .add_plugins(PanCamPlugin::default())
+            .add_plugins(WindowIconPlugin::new("images/bevy_r_place.png"))
             .insert_resource(CanvasSink::default())
             .add_systems(Startup, setup_ui)
             .add_systems(Update, (

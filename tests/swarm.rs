@@ -1,7 +1,28 @@
 use std::time::Duration;
 
 use bevy_r_place::prelude::*;
-use tokio::time::sleep;
+use tokio::{
+    select,
+    time::sleep,
+};
+
+
+pub async fn wait_for_subscription(
+    handle: &BevyPlaceNodeHandle,
+    timeout_duration: Duration,
+) -> Result<(), String> {
+    select! {
+        received = handle.sub_rx.recv() => {
+            match received {
+                Ok(_peer_id) => Ok(()),
+                Err(e) => Err(format!("Error receiving from channel: {e}")),
+            }
+        }
+        _ = sleep(timeout_duration) => {
+            Err("Timed out waiting for subscription.".to_string())
+        }
+    }
+}
 
 
 #[tokio::test]
@@ -13,8 +34,8 @@ async fn test_multi_node() {
     let handle2 = tokio::spawn(run_swarm_task(node2));
 
     let timeout = Duration::from_secs(5);
-    node1_handle.wait_for_subscription(timeout).await.unwrap();
-    node2_handle.wait_for_subscription(timeout).await.unwrap();
+    wait_for_subscription(&node1_handle, timeout).await.unwrap();
+    wait_for_subscription(&node2_handle, timeout).await.unwrap();
 
     sleep(timeout).await;
 
