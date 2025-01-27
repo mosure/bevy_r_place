@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+
 use bevy::{
     prelude::*,
     render::{
@@ -14,13 +15,13 @@ use serde::{Serialize, Deserialize};
 
 
 pub const CHUNK_SIZE: u32 = 64;
-pub const WORLD_WIDTH: u32 = 2048;
-pub const WORLD_HEIGHT: u32 = 2048;
+pub const WORLD_WIDTH: u32 = 1024;
+pub const WORLD_HEIGHT: u32 = 1024;
 pub const CHUNKS_X: u32 = WORLD_WIDTH / CHUNK_SIZE;
 pub const CHUNKS_Y: u32 = WORLD_HEIGHT / CHUNK_SIZE;
 
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pixel {
     pub r: u8,
     pub g: u8,
@@ -41,7 +42,7 @@ impl Default for Pixel {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Chunk {
     pub pixels: Vec<Pixel>,
 }
@@ -141,8 +142,7 @@ impl ChunkedCanvas {
     }
 }
 
-/// A chunk snapshot for IPFS storage
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChunkSnapshot {
     pub cx: u32,
     pub cy: u32,
@@ -157,4 +157,17 @@ impl ChunkSnapshot {
             chunk: chunk.clone(),
         }
     }
+}
+
+
+// TODO: design a better canvas transfer method, support chunking to arbitrary world sizes
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CanvasRequest {
+    pub chunk_x: u32,
+    pub chunk_y: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CanvasResponse {
+    pub chunk: ChunkSnapshot,
 }

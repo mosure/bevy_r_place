@@ -88,6 +88,7 @@ features = [
 version = "0.55"
 features = [
   "async-std",
+  "cbor",
   "dns",
   "ed25519",
   "mdns",
