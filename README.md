@@ -4,7 +4,7 @@ p2p r/place clone
 
 ## features
 - [x] local libp2p
+- [ ] peer/swarm visualization
 - [ ] headless bootstrap node
-- [ ] bootstrapped libp2p /w default mainnet and network selection
-- [ ] ipfs chunked crdt initialization
+- [ ] default mainnet and network selection
 - [ ] solana implementation

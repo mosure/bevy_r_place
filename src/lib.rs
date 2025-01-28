@@ -17,12 +17,12 @@ pub mod prelude {
     pub use crate::headless::HeadlessPlugin;
     pub use crate::network::{
         build_node,
-        inbound_pixel_update_system,
         run_swarm_task,
         BevyPlaceNode,
         BevyPlaceNodeConfig,
         BevyPlaceNodeHandle,
         PixelUpdateMsg,
+        SwarmPlugin,
     };
     pub use crate::viewer::ViewerPlugin;
 }
