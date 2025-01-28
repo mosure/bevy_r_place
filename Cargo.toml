@@ -64,7 +64,7 @@ cbor4ii = { version = "1.0", features = ["serde1", "use_std"] }
 clap = { version = "4.5", features = ["derive"] }
 futures = "0.3"
 libp2p-webrtc = { version = "0.9.0-alpha", optional = true }
-rand = "0.9"
+rand = "0.8.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["macros"] }
@@ -94,16 +94,17 @@ version = "0.55"
 features = [
   "async-std",
   "cbor",
+  "dcutr",
   "dns",
   "ed25519",
   "mdns",
-  "floodsub",
   "gossipsub",
   "identify",
   "kad",
   "macros",
   "mdns",
   "memory-connection-limits",
+  "metrics",
   "noise",
   "ping",
   "quic",
@@ -112,6 +113,7 @@ features = [
   "rsa",
   "serde",
   "tcp",
+  "tls",
   "tokio",
   "websocket",
   "yamux",
@@ -133,6 +135,7 @@ features = [
 criterion = { version = "0.5", features = ["html_reports"] }
 futures-intrusive = { version = "0.5.0" }
 pollster = { version = "0.4.0" }
+serial_test = "3.2"
 
 [profile.dev.package."*"]
 opt-level = 3

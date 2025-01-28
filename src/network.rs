@@ -4,6 +4,7 @@ use std::{
         IpAddr,
         Ipv4Addr,
     },
+    sync::{Arc, Mutex},
 };
 
 use async_channel::{Sender, Receiver};
@@ -83,6 +84,7 @@ pub struct BevyPlaceNodeHandle {
     pub chunk_topic: gossipsub::IdentTopic,
     pub peer_topic: gossipsub::IdentTopic,
     pub pixel_topic: gossipsub::IdentTopic,
+    pub listening_addrs: Arc<Mutex<Vec<Multiaddr>>>,
 }
 
 pub struct BevyPlaceNode {
@@ -97,6 +99,7 @@ pub struct BevyPlaceNode {
     pub peer_topic: gossipsub::IdentTopic,
     pub pixel_topic: gossipsub::IdentTopic,
     pub config: BevyPlaceNodeConfig,
+    pub listening_addrs: Arc<Mutex<Vec<Multiaddr>>>,
 }
 
 
@@ -107,12 +110,14 @@ mod native {
         collections::hash_map::DefaultHasher,
         error::Error,
         hash::{Hash, Hasher},
-        time::{Duration, SystemTime, UNIX_EPOCH},
+        sync::{Arc, Mutex},
+        time::Duration,
     };
 
     use async_channel::unbounded;
     use bevy::prelude::*;
     use libp2p::{
+        dcutr,
         futures::StreamExt,
         gossipsub,
         identify,
@@ -120,20 +125,22 @@ mod native {
         mdns,
         memory_connection_limits,
         multiaddr::Protocol,
-        Multiaddr,
-        PeerId,
+        noise,
+        ping,
         relay,
         request_response,
-        StreamProtocol,
         swarm::{NetworkBehaviour, SwarmEvent},
-        SwarmBuilder,
         tcp,
-        noise,
         yamux,
+        Multiaddr,
+        PeerId,
+        StreamProtocol,
+        SwarmBuilder,
     };
     // TODO: copy https://github.com/libp2p/universal-connectivity/blob/main/rust-peer/src/main.rs#L311
     use libp2p_webrtc as webrtc;
     use libp2p_webrtc::tokio::Certificate;
+    use rand::Rng;
     use tokio::{
         io,
         select,
@@ -159,24 +166,25 @@ mod native {
 
     #[derive(NetworkBehaviour)]
     pub struct BevyPlaceBehavior {
+        pub dcutr: dcutr::Behaviour,
         pub gossipsub: gossipsub::Behaviour,
         pub identify: identify::Behaviour,
         pub kademlia: kad::Behaviour<kad::store::MemoryStore>,
         pub limits: memory_connection_limits::Behaviour,
         pub mdns: mdns::tokio::Behaviour,
-        pub relay: relay::Behaviour,
+        pub ping: ping::Behaviour,
+        pub relay: relay::client::Behaviour,
         pub request_response: request_response::Behaviour<Codec<CanvasRequest, CanvasResponse>>,
     }
 
-    fn current_timestamp_as_vec() -> Vec<u8> {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
-        let secs = now.as_secs();
-        secs.to_be_bytes().to_vec()
+    fn random_data() -> Vec<u8> {
+        let mut rng = rand::thread_rng();
+        let mut data = vec![0; 32];
+        rng.fill(&mut data[..]);
+        data
     }
 
-    pub fn build_node(
+    pub async fn build_node(
         config: BevyPlaceNodeConfig,
     ) -> Result<(BevyPlaceNode, BevyPlaceNodeHandle), Box<dyn Error>>  {
         let (inbound_tx, inbound_rx) = unbounded::<PixelUpdateMsg>();
@@ -195,8 +203,16 @@ mod native {
                 yamux::Config::default,
             )?
             .with_quic()
-            .with_behaviour(|key| {
+            .with_dns()?
+            .with_websocket(
+                noise::Config::new,
+                yamux::Config::default
+            ).await?
+            .with_relay_client(noise::Config::new, yamux::Config::default)?
+            .with_behaviour(|key, relay| {
                 let local_peer_id = key.public().to_peer_id();
+
+                let dcutr = dcutr::Behaviour::new(local_peer_id);
 
                 let message_id_fn = |message: &gossipsub::Message| {
                     let mut hasher = DefaultHasher::new();
@@ -236,21 +252,12 @@ mod native {
                     key.public().to_peer_id(),
                 )?;
 
-                let relay = relay::Behaviour::new(
-                    local_peer_id,
-                    relay::Config {
-                        max_reservations_per_peer: 100,
-                        max_circuits_per_peer: 100,
-                        ..Default::default()
-                    },
-                );
+                let ping = ping::Behaviour::new(ping::Config::new());
 
                 // TODO: only request visible chunks (lowering max response size requirement)
                 // TODO: use a custom codec copy for now, until https://github.com/libp2p/rust-libp2p/pull/5830 releases
                 let max_response_size = (std::mem::size_of::<Pixel>() * WORLD_WIDTH as usize * WORLD_HEIGHT as usize
                     + (WORLD_WIDTH / CHUNK_SIZE * WORLD_HEIGHT / CHUNK_SIZE * 8) as usize) * 2;
-                println!("expected max response size: {}", max_response_size);
-
                 let canvas_codec = Codec::<CanvasRequest, CanvasResponse>::default()
                     .set_response_size_maximum(max_response_size as u64);
                 let request_response = request_response::Behaviour::with_codec(
@@ -263,18 +270,19 @@ mod native {
                 );
 
                 Ok(BevyPlaceBehavior {
+                    dcutr,
                     gossipsub,
                     identify,
                     kademlia,
                     limits,
                     mdns,
+                    ping,
                     relay,
                     request_response,
                 })
             })?
             .build();
 
-        // TODO: configurable address
         let tcp_addr = Multiaddr::from(config.addr)
             .with(Protocol::Tcp(config.tcp_port));
         swarm.listen_on(tcp_addr)?;
@@ -284,23 +292,11 @@ mod native {
             .with(Protocol::QuicV1);
         swarm.listen_on(quic_addr)?;
 
-        // TODO: add the webrtc transport - https://github.com/libp2p/universal-connectivity/blob/main/rust-peer/src/main.rs#L347
+        // TODO: listen on webrtc when it's ready
         // let webrtc_addr = Multiaddr::from(config.addr)
         //     .with(Protocol::Udp(config.webrtc_port))
         //     .with(Protocol::WebRTCDirect);
         // swarm.listen_on(webrtc_addr)?;
-
-        // let transport = {
-        //     let webrtc = webrtc::tokio::Transport::new(local_key.clone(), certificate);
-        //     let quic = quic::tokio::Transport::new(quic::Config::new(&local_key));
-
-        //     let mapped = webrtc.or_transport(quic).map(|fut, _| match fut {
-        //         Either::Right((local_peer_id, conn)) => (local_peer_id, StreamMuxerBox::new(conn)),
-        //         Either::Left((local_peer_id, conn)) => (local_peer_id, StreamMuxerBox::new(conn)),
-        //     });
-
-        //     dns::TokioDnsConfig::system(mapped)?.boxed()
-        // };
 
         let chunk_topic = gossipsub::IdentTopic::new(&config.chunk_topic);
         swarm.behaviour_mut().gossipsub.subscribe(&chunk_topic)?;
@@ -311,6 +307,7 @@ mod native {
         let pixel_topic = gossipsub::IdentTopic::new(&config.pixel_topic);
         swarm.behaviour_mut().gossipsub.subscribe(&pixel_topic)?;
 
+        let listening_addrs = Arc::new(Mutex::new(vec![]));
 
         Ok((
             BevyPlaceNode {
@@ -325,6 +322,7 @@ mod native {
                 peer_topic: peer_topic.clone(),
                 pixel_topic: pixel_topic.clone(),
                 config,
+                listening_addrs: listening_addrs.clone(),
             },
             BevyPlaceNodeHandle {
                 inbound_rx,
@@ -336,6 +334,7 @@ mod native {
                 chunk_topic,
                 peer_topic,
                 pixel_topic,
+                listening_addrs,
             },
         ))
     }
@@ -346,6 +345,12 @@ mod native {
         let pixel_hash = node.pixel_topic.hash();
 
         let mut initialized = node.config.bootstrap_peers.is_empty();
+
+        for peer in node.config.bootstrap_peers {
+            if let Err(e) = node.swarm.dial(peer.clone()) {
+                info!("failed to dial bootstrap {peer:?}: {e}");
+            }
+        }
 
         loop {
             select! {
@@ -428,7 +433,7 @@ mod native {
                                 node.swarm
                                     .behaviour_mut()
                                     .gossipsub
-                                    .publish(node.chunk_topic.clone(), current_timestamp_as_vec())
+                                    .publish(node.chunk_topic.clone(), random_data())
                                     .expect("failed to notify initialized canvas is available");
                             }
                         }
@@ -484,8 +489,8 @@ mod native {
                                 node.swarm.add_external_address(external_address);
                             }
 
-                            let p2p_address = address.with(Protocol::P2p(*node.swarm.local_peer_id()));
-                            info!("listening on {p2p_address}");
+                            info!("listening on {address}");
+                            node.listening_addrs.lock().unwrap().push(address);
                         }
                         SwarmEvent::ConnectionEstablished { peer_id, .. } => {
                             info!("connected to {peer_id}");
@@ -625,11 +630,11 @@ pub async fn run_swarm_task(node: BevyPlaceNode) {
 }
 
 
-pub fn build_node(
+pub async fn build_node(
     config: BevyPlaceNodeConfig,
 ) -> Result<(BevyPlaceNode, BevyPlaceNodeHandle), Box<dyn Error>>  {
     #[cfg(feature = "native")]
-    native::build_node(config)
+    native::build_node(config).await
 }
 
 
@@ -671,12 +676,12 @@ fn inbound_pixel_update_system(
 
         let updated = canvas.set_pixel(update.x, update.y, pixel);
         if updated {
-            info!(
+            debug!(
                 "inbound pixel from network at ({},{}), with color({},{},{}).",
                 update.x, update.y, update.r, update.g, update.b
             );
         } else {
-            info!("ignored older or out-of-bounds update from network at ({},{}).", update.x, update.y);
+            debug!("ignored older or out-of-bounds update from network at ({},{}).", update.x, update.y);
         }
 
         // TODO: manage periodic chunk storing

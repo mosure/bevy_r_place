@@ -23,13 +23,23 @@ pub struct BevyPlaceConfig {
     #[arg(long, default_value = "false", help = "is this node a bootstrap node?")]
     pub bootstrap_node: bool,
 
-    // TODO: support network selection (custom bootstrap peers), note: network collision detection is not implemented
+    #[arg(
+        long = "bootstrap-nodes",
+        help = "e.g. /ip4/127.0.0.1/tcp/4001",
+        default_values_t = vec![
+            "/ip4/127.0.0.1/tcp/4001".to_string(),
+        ],
+    )]
+    pub bootstrap_nodes: Vec<String>,
 }
 
 impl Default for BevyPlaceConfig {
     fn default() -> Self {
         Self {
             bootstrap_node: false,
+            bootstrap_nodes: vec![
+                "/ip4/127.0.0.1/tcp/4001".to_string(),
+            ],
         }
     }
 }
@@ -54,7 +64,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             bootstrap_peers,
             ..default()
         }
-    ).expect("failed to build node");
+    ).await.expect("failed to build node");
 
     let runtime_handle = tokio::runtime::Handle::current();
     runtime_handle.spawn(run_swarm_task(node));

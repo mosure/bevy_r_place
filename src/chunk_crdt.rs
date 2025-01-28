@@ -267,8 +267,6 @@ pub mod codec {
         where
             T: AsyncRead + Unpin + Send,
         {
-            println!("READING RESPONSE, max size: {}", self.response_size_maximum);
-
             let mut vec = Vec::new();
 
             io.take(self.response_size_maximum)
