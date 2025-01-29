@@ -112,7 +112,7 @@ fn setup_ui(
     mut sink: ResMut<CanvasSink>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    sink.image = images.add(canvas.to_image()).into();
+    sink.image = images.add(canvas.to_image());
     commands.spawn(Sprite::from_image(sink.image.clone()));
 
     commands.spawn((
@@ -179,7 +179,7 @@ impl Plugin for ViewerPlugin {
                 })
             )
             .add_plugins(ColorPickerPlugin)
-            .add_plugins(PanCamPlugin::default())
+            .add_plugins(PanCamPlugin)
             .insert_resource(CanvasSink::default())
             .add_systems(Startup, setup_ui)
             .add_systems(Update, (

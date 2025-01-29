@@ -247,8 +247,8 @@ mod native {
                 } else {
                     let rcgen_cert = generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
                     (
-                        rcgen_cert.key_pair.serialize_der(),
                         rcgen_cert.cert.der().to_vec(),
+                        rcgen_cert.key_pair.serialize_der(),
                     )
                 };
 

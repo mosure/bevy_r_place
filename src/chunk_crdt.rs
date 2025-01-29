@@ -23,7 +23,7 @@ pub const CHUNKS_X: u32 = WORLD_WIDTH / CHUNK_SIZE;
 pub const CHUNKS_Y: u32 = WORLD_HEIGHT / CHUNK_SIZE;
 
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pixel {
     pub r: u8,
     pub g: u8,
@@ -32,30 +32,21 @@ pub struct Pixel {
     pub owner: [u8; 32],
 }
 
-impl Default for Pixel {
-    fn default() -> Self {
-        Pixel {
-            r: 0,
-            g: 0,
-            b: 0,
-            timestamp: 0,
-            owner: [0;32],
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Chunk {
     pub pixels: Vec<Pixel>,
 }
 
-impl Chunk {
-    pub fn new() -> Self {
+impl Default for Chunk {
+    fn default() -> Self {
         Self {
             pixels: vec![Pixel::default(); (CHUNK_SIZE * CHUNK_SIZE) as usize],
         }
     }
+}
 
+impl Chunk {
     /// last-writer-wins update
     pub fn update_pixel(&mut self, x: u32, y: u32, new_pixel: Pixel) -> bool {
         if x >= CHUNK_SIZE || y >= CHUNK_SIZE {
@@ -85,7 +76,7 @@ impl ChunkedCanvas {
         let mut map = HashMap::new();
         for cx in 0..CHUNKS_X {
             for cy in 0..CHUNKS_Y {
-                map.insert((cx, cy), Chunk::new());
+                map.insert((cx, cy), Chunk::default());
             }
         }
         Self { chunks: map }
@@ -122,7 +113,7 @@ impl ChunkedCanvas {
                     let wy = cy * CHUNK_SIZE + y;
 
                     let index = ((wy * WORLD_WIDTH + wx) * 4) as usize;
-                    raw_data[index + 0] = pixel.r;
+                    raw_data[index] = pixel.r;
                     raw_data[index + 1] = pixel.g;
                     raw_data[index + 2] = pixel.b;
                     raw_data[index + 3] = 255;
