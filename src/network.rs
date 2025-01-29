@@ -236,21 +236,33 @@ mod native {
                     )
                     .unwrap();
 
-                // TODO: read certs from config if they exist
-                let rcgen_cert = generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
-                let priv_key = websocket::tls::PrivateKey::new(rcgen_cert.key_pair.serialize_der());
-                let cert = websocket::tls::Certificate::new(rcgen_cert.cert.der().to_vec());
+                let (
+                    certificate,
+                    private_key,
+                ) = if config.certificate.is_some() && config.private_key.is_some() {
+                    (
+                        config.certificate.clone().unwrap(),
+                        config.private_key.clone().unwrap(),
+                    )
+                } else {
+                    let rcgen_cert = generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+                    (
+                        rcgen_cert.key_pair.serialize_der(),
+                        rcgen_cert.cert.der().to_vec(),
+                    )
+                };
 
-                let tls_config = websocket::tls::Config::new(priv_key, vec![cert])?;
+                let certificate = websocket::tls::Certificate::new(certificate);
+                let private_key = websocket::tls::PrivateKey::new(private_key);
 
                 let mut transport = websocket::WsConfig::new(
                     base_transport,
                 );
 
+                let tls_config = websocket::tls::Config::new(private_key, vec![certificate])?;
                 transport.set_tls_config(tls_config);
 
                 let noise_config = noise::Config::new(local_key)?;
-
                 let upgraded_transport = transport
                     .upgrade(libp2p::core::upgrade::Version::V1)
                     .authenticate(noise_config)
