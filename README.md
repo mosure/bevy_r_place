@@ -1,6 +1,6 @@
 # bevy_r_place 🖼️
 
-[![GitHub License](https://img.shields.io/github/license/mosure/bevy_r_place)](https://raw.githubusercontent.com/mosure/bevy_r_place/main/LICENSE)
+[![GitHub License](https://img.shields.io/github/license/mosure/bevy_r_place)](https://raw.githubusercontent.com/mosure/bevy_r_place/main/LICENSE-MIT)
 [![crates.io](https://img.shields.io/crates/v/bevy_r_place.svg)](https://crates.io/crates/bevy_r_place)
 
 
