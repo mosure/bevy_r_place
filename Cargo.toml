@@ -59,7 +59,7 @@ native = [
   "winit",
 ]
 web = [
-  "bevy/webgpu",
+  "bevy/webgl2",
   "libp2p-webrtc-websys",
   "libp2p/wasm-bindgen",
   "libp2p/websocket-websys",

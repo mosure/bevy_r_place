@@ -17,8 +17,8 @@ use crate::time::epoch_time_seconds;
 
 
 pub const CHUNK_SIZE: u32 = 64;
-pub const WORLD_WIDTH: u32 = 1024;
-pub const WORLD_HEIGHT: u32 = 1024;
+pub const WORLD_WIDTH: u32 = 512;
+pub const WORLD_HEIGHT: u32 = 512;
 pub const CHUNKS_X: u32 = WORLD_WIDTH / CHUNK_SIZE;
 pub const CHUNKS_Y: u32 = WORLD_HEIGHT / CHUNK_SIZE;
 

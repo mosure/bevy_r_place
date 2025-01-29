@@ -7,5 +7,6 @@ EXPOSE 4201/udp     # QUIC
 EXPOSE 4202         # TCP
 EXPOSE 4203         # WebSocket
 EXPOSE 4204         # Secure WebSocket
+EXPOSE 4205/udp     # WebRTC
 
 CMD ["bevy_r_place_viewer"]

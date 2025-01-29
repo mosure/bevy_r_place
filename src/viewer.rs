@@ -128,6 +128,8 @@ fn setup_ui(
         // TODO: consider disabling zoom (or restricting it to a number of chunks to prevent requesting all chunks at once)
         PanCam {
             grab_buttons: vec![MouseButton::Middle, MouseButton::Right],
+            max_scale: 1.0,
+            min_scale: 0.01,
             ..default()
         },
     ));

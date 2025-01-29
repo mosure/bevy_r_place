@@ -15,6 +15,7 @@ p2p r/place clone, view the [web demo on mainnet](https://mosure.github.io/bevy_
 - [X] headless bootstrap node
 - [X] default mainnet and network selection
 - [X] published image
+- [X] LAN auto-discovery
 - [ ] prometheus/opentelemetry metrics /w grafana frontend
 - [ ] swarm visualization
 - [ ] solana implementation
@@ -49,3 +50,16 @@ see: https://libp2p.github.io/rust-libp2p/metrics_example/index.html
 ### graph visualization
 
 > TODO: swarm topology viewer
+
+
+## TLS
+
+required for proper WSS and WebRTC function
+
+### local setup
+
+- `mkcert -install`
+- `mkcert 127.0.0.1`
+- `openssl x509 -in ./127.0.0.1.pem -outform der -out ./certs/certificate.der`
+- `openssl rsa -in ./127.0.0.1-key.pem -outform der -out ./certs/private_key.der`
+- `cargo run -- --bootstrap --headless --certificate-chain-path ./certs/certificate.der --private-key-path ./certs/private_key.der --webrtc-pem-certificate-path ./certs/webrtc.pem`

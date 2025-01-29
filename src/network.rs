@@ -60,6 +60,7 @@ pub struct BevyPlaceNodeConfig {
     pub kademlia_protocol: StreamProtocol,
     pub certificate: Option<Vec<u8>>,
     pub private_key: Option<Vec<u8>>,
+    pub webrtc_pem_certificate_path: Option<String>,
 }
 
 impl Default for BevyPlaceNodeConfig {
@@ -81,6 +82,7 @@ impl Default for BevyPlaceNodeConfig {
             kademlia_protocol: StreamProtocol::new("/ipfs/kad/1.0.0"),
             certificate: None,
             private_key: None,
+            webrtc_pem_certificate_path: None,
         }
     }
 }
@@ -143,6 +145,7 @@ mod native {
     use async_channel::unbounded;
     use bevy::prelude::*;
     use libp2p::{
+        core::muxing::StreamMuxerBox,
         dcutr,
         dns,
         futures::StreamExt,
@@ -168,8 +171,7 @@ mod native {
         websocket,
     };
     // TODO: copy https://github.com/libp2p/universal-connectivity/blob/main/rust-peer/src/main.rs#L311
-    // use libp2p_webrtc as webrtc;
-    // use libp2p_webrtc::tokio::Certificate;
+    use libp2p_webrtc as webrtc;
     use rcgen::generate_simple_self_signed;
     use tokio::{
         io,
@@ -245,14 +247,14 @@ mod native {
                         config.private_key.clone().unwrap(),
                     )
                 } else {
-                    let rcgen_cert = generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+                    let rcgen_cert = generate_simple_self_signed(vec!["127.0.0.1".to_string()]).unwrap();
                     (
                         rcgen_cert.cert.der().to_vec(),
                         rcgen_cert.key_pair.serialize_der(),
                     )
                 };
 
-                let certificate = websocket::tls::Certificate::new(certificate);
+                let certificate = websocket::tls::Certificate::new(certificate.clone());
                 let private_key = websocket::tls::PrivateKey::new(private_key);
 
                 let mut transport = websocket::WsConfig::new(
@@ -264,11 +266,37 @@ mod native {
 
                 let noise_config = noise::Config::new(local_key)?;
                 let upgraded_transport = transport
-                    .upgrade(libp2p::core::upgrade::Version::V1)
+                    .upgrade(libp2p::core::upgrade::Version::V1Lazy)
                     .authenticate(noise_config)
                     .multiplex(yamux::Config::default());
 
                 Ok(upgraded_transport)
+            })?
+            .with_other_transport(|local_key| {
+                let certificate = if let Some(cert_path) = config.webrtc_pem_certificate_path.clone() {
+                    let pem = if let Ok(pem) = std::fs::read_to_string(&cert_path) {
+                        pem
+                    } else {
+                        let pem = webrtc::tokio::Certificate::generate(&mut rand::thread_rng())?;
+                        let pem = pem.serialize_pem();
+
+                        std::fs::write(cert_path, &pem)?;
+
+                        pem
+                    };
+
+                    webrtc::tokio::Certificate::from_pem(&pem)?
+                } else {
+                    webrtc::tokio::Certificate::generate(&mut rand::thread_rng())?
+                };
+
+                let webrtc_transport = webrtc::tokio::Transport::new(
+                        local_key.clone(),
+                        certificate,
+                    )
+                    .map(|(peer_id, conn), _| (peer_id, StreamMuxerBox::new(conn)));
+
+                Ok(webrtc_transport)
             })?
             .with_dns()?
             .with_websocket(
@@ -372,15 +400,14 @@ mod native {
 
         let wss_addr = Multiaddr::from(config.addr)
             .with(Protocol::Tcp(config.wss_port))
-            .with(Protocol::Tls)
-            .with(Protocol::Ws(config.wss_path.clone().into()));
+            .with(Protocol::Wss(config.wss_path.clone().into()));
         swarm.listen_on(wss_addr)?;
 
-        // TODO: listen on webrtc when it's ready
-        // let webrtc_addr = Multiaddr::from(config.addr)
-        //     .with(Protocol::Udp(config.webrtc_port))
-        //     .with(Protocol::WebRTCDirect);
-        // swarm.listen_on(webrtc_addr)?;
+        let webrtc_addr = Multiaddr::from(config.addr)
+            .with(Protocol::Udp(config.webrtc_port))
+            .with(Protocol::WebRTCDirect);
+        swarm.listen_on(webrtc_addr)?;
+
 
         let chunk_topic = gossipsub::IdentTopic::new(&config.chunk_topic);
         swarm.behaviour_mut().gossipsub.subscribe(&chunk_topic)?;
@@ -576,32 +603,32 @@ mod native {
                             info!("listening on {address}");
                             node.listening_addrs.lock().unwrap().push(address);
                         }
-                        SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-                            info!("connected to {peer_id}");
+                        SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
+                            info!("connected to {peer_id} at {endpoint:?}");
                         }
-                        SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
-                            debug!("disconnected from {peer_id}: {cause:?}");
+                        SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, .. } => {
+                            info!("disconnected from {peer_id} at {endpoint:?}: {cause:?}");
                         }
-                        SwarmEvent::IncomingConnection { .. } => {
-                            debug!("incoming connection");
+                        SwarmEvent::IncomingConnection { local_addr, send_back_addr, connection_id } => {
+                            info!("incoming connection: {connection_id}, local_addr: {local_addr}, send_back_addr: {send_back_addr}");
                         }
-                        SwarmEvent::IncomingConnectionError { .. } => {
-                            debug!("incoming connection error");
+                        SwarmEvent::IncomingConnectionError { local_addr, send_back_addr, error, connection_id } => {
+                            warn!("incoming connection error: {connection_id}, local_addr: {local_addr}, send_back_addr: {send_back_addr}, error: {error}");
                         }
-                        SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
-                            debug!("outgoing connection error: {:?}: {error}", peer_id);
+                        SwarmEvent::OutgoingConnectionError { peer_id, error, connection_id } => {
+                            warn!("outgoing connection error, {connection_id} - {peer_id:?}: {error}");
                         }
                         SwarmEvent::ExpiredListenAddr { address, .. } => {
                             debug!("expired listen address {address}");
                         }
                         SwarmEvent::ListenerClosed { addresses, .. } => {
-                            debug!("listener closed on {addresses:?}");
+                            info!("listener closed on {addresses:?}");
                         }
                         SwarmEvent::ListenerError { error, .. } => {
-                            debug!("listener error: {error}");
+                            warn!("listener error: {error}");
                         }
                         SwarmEvent::Dialing { peer_id, .. } => {
-                            debug!("dialing {:?}", peer_id);
+                            info!("dialing {:?}", peer_id);
                         }
                         SwarmEvent::NewExternalAddrCandidate { address } => {
                             debug!("new external address candidate {address}");
@@ -735,6 +762,10 @@ mod web {
         websocket_websys,
         webtransport_websys,
     };
+    use libp2p_webrtc_websys::{
+        Config as WebrtcConfig,
+        Transport as WebrtcTransport,
+    };
     use tokio::io;
 
     use crate::chunk_crdt::{
@@ -782,6 +813,9 @@ mod web {
 
         let mut swarm = SwarmBuilder::with_new_identity()
             .with_wasm_bindgen()
+            .with_other_transport(|local_key| {
+                WebrtcTransport::new(WebrtcConfig::new(&local_key))
+            })?
             .with_other_transport(|local_key| {
                 Ok(websocket_websys::Transport::default()
                     .upgrade(Version::V1Lazy)
@@ -1089,32 +1123,32 @@ mod web {
                             info!("listening on {address}");
                             node.listening_addrs.lock().unwrap().push(address);
                         }
-                        SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-                            info!("connected to {peer_id}");
+                        SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
+                            info!("connected to {peer_id} at {endpoint:?}");
                         }
-                        SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
-                            debug!("disconnected from {peer_id}: {cause:?}");
+                        SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, .. } => {
+                            info!("disconnected from {peer_id} at {endpoint:?}: {cause:?}");
                         }
-                        SwarmEvent::IncomingConnection { .. } => {
-                            debug!("incoming connection");
+                        SwarmEvent::IncomingConnection { local_addr, send_back_addr, connection_id } => {
+                            info!("incoming connection: {connection_id}, local_addr: {local_addr}, send_back_addr: {send_back_addr}");
                         }
-                        SwarmEvent::IncomingConnectionError { .. } => {
-                            debug!("incoming connection error");
+                        SwarmEvent::IncomingConnectionError { local_addr, send_back_addr, error, connection_id } => {
+                            warn!("incoming connection error: {connection_id}, local_addr: {local_addr}, send_back_addr: {send_back_addr}, error: {error}");
                         }
-                        SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
-                            debug!("outgoing connection error: {:?}: {error}", peer_id);
+                        SwarmEvent::OutgoingConnectionError { peer_id, error, connection_id } => {
+                            warn!("outgoing connection error, {connection_id} - {peer_id:?}: {error}");
                         }
                         SwarmEvent::ExpiredListenAddr { address, .. } => {
                             debug!("expired listen address {address}");
                         }
                         SwarmEvent::ListenerClosed { addresses, .. } => {
-                            debug!("listener closed on {addresses:?}");
+                            info!("listener closed on {addresses:?}");
                         }
                         SwarmEvent::ListenerError { error, .. } => {
-                            debug!("listener error: {error}");
+                            warn!("listener error: {error}");
                         }
                         SwarmEvent::Dialing { peer_id, .. } => {
-                            debug!("dialing {:?}", peer_id);
+                            info!("dialing {:?}", peer_id);
                         }
                         SwarmEvent::NewExternalAddrCandidate { address } => {
                             debug!("new external address candidate {address}");

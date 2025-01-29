@@ -9,6 +9,7 @@ out/
 
 .DS_Store
 
+certs/
 screenshots/
 headless_output/
 www/assets/

@@ -42,12 +42,19 @@ pub struct BevyPlaceConfig {
     #[arg(long, default_value = "/", help = "the wss path to bind to")]
     pub wss_path: String,
 
+    #[arg(long, default_value = None, help = "the webrtc pem certificate path")]
+    pub webrtc_pem_certificate_path: Option<String>,
+
+    #[arg(long, default_value = "4205", help = "the webrtc port to bind to")]
+    pub webrtc_port: u16,
+
     #[arg(long, default_value = "false", help = "whether or not this node is a bootstrap node")]
     pub bootstrap: bool,
 
     #[arg(long, default_value = "", help = "singular cli argument of bootstrap_nodes")]
     pub network: String,
 
+    // TODO: de-duplicate defaults across clap and Default impl
     #[arg(
         long = "bootstrap-nodes",
         help = "e.g. /ip4/127.0.0.1/tcp/4201",
@@ -56,6 +63,7 @@ pub struct BevyPlaceConfig {
             "/ip4/127.0.0.1/tcp/4202".to_string(),
             "/ip4/127.0.0.1/tcp/4203/ws".to_string(),
             "/ip4/127.0.0.1/tcp/4204/wss".to_string(),
+            "/ip4/127.0.0.1/udp/4205/webrtc-direct/certhash/uEiCMKpbQeJQuNNZSWyljeixDlNYLFllcZDX5LGGwwxTcmQ".to_string(),
         ],
     )]
     pub bootstrap_nodes: Vec<String>,
@@ -66,13 +74,13 @@ pub struct BevyPlaceConfig {
     #[arg(long, default_value = "false", help = "short parameter for overriding bootstrap_nodes with mainnet")]
     pub mainnet: bool,
 
-    #[arg(long, default_value = "false", help = "serialize pixel updates to disk")]
+    #[arg(long, default_value = None, help = "serialize pixel updates to disk")]
     pub artifact_s3_bucket: Option<String>,
 
-    #[arg(long, default_value = "false", help = "path to certificate chain file")]
+    #[arg(long, default_value = None, help = "path to certificate chain file")]
     pub certificate_chain_path: Option<String>,
 
-    #[arg(long, default_value = "false", help = "path to private key file")]
+    #[arg(long, default_value = None, help = "path to private key file")]
     pub private_key_path: Option<String>,
 }
 
@@ -86,6 +94,8 @@ impl Default for BevyPlaceConfig {
             ws_path: "/".to_string(),
             wss_port: 4204,
             wss_path: "/".to_string(),
+            webrtc_pem_certificate_path: None,
+            webrtc_port: 4205,
             bootstrap: false,
             network: "".to_string(),
             bootstrap_nodes: vec![
@@ -93,6 +103,8 @@ impl Default for BevyPlaceConfig {
                 "/ip4/127.0.0.1/tcp/4202".to_string(),
                 "/ip4/127.0.0.1/tcp/4203/ws".to_string(),
                 "/ip4/127.0.0.1/tcp/4204/wss".to_string(),
+                // note, default won't work without a valid cert hash
+                "/ip4/127.0.0.1/udp/4205/webrtc-direct/certhash/uEiCMKpbQeJQuNNZSWyljeixDlNYLFllcZDX5LGGwwxTcmQ".to_string(),
             ],
             headless: false,
             mainnet: false,
@@ -127,10 +139,23 @@ async fn run_app_async() -> Result<(), Box<dyn Error>> {
                 "/dns4/bevy_r_place.mosure.dev/tcp/4202".parse()?,
                 "/dns4/bevy_r_place.mosure.dev/tcp/4203/ws".parse()?,
                 "/dns4/bevy_r_place.mosure.dev/tcp/4204/wss".parse()?,
+                "/dns4/bevy_r_place.mosure.dev/udp/4205/webrtc-direct".parse()?,
             ]
         }
 
         bootstrap_nodes
+    };
+
+    let certificate = if let Some(path) = args.certificate_chain_path.as_ref() {
+        std::fs::read(path)?.into()
+    } else {
+        None
+    };
+
+    let private_key = if let Some(path) = args.private_key_path.as_ref() {
+        std::fs::read(path)?.into()
+    } else {
+        None
     };
 
     let (node, node_handle) = build_node(
@@ -141,6 +166,12 @@ async fn run_app_async() -> Result<(), Box<dyn Error>> {
             tcp_port: args.tcp_port,
             ws_port: args.ws_port,
             ws_path: args.ws_path,
+            wss_port: args.wss_port,
+            wss_path: args.wss_path,
+            certificate,
+            private_key,
+            webrtc_port: args.webrtc_port,
+            webrtc_pem_certificate_path: args.webrtc_pem_certificate_path,
             ..default()
         }
     ).await.expect("failed to build node");
