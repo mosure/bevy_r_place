@@ -18,7 +18,6 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt, clippy
-          enable-sccache: "false"
 
       - name: Build release binary
         run: cargo build --release --no-default-features --features native
