@@ -1,7 +1,5 @@
-use bevy::{
-    prelude::*,
-    winit::WinitWindows,
-};
+use bevy::prelude::*;
+
 
 pub struct WindowIconPlugin {
     icon_path: String,
@@ -39,7 +37,7 @@ fn load_icon_image(
 }
 
 fn set_window_icon(
-    windows: NonSend<WinitWindows>,
+    windows: NonSend<bevy::winit::WinitWindows>,
     icon: Res<WindowIcon>,
     asset_server: Res<AssetServer>,
     images: Res<Assets<Image>>,

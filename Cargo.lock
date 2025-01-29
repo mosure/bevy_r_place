@@ -592,7 +592,7 @@ dependencies = [
  "futures-core",
  "futures-io",
  "futures-lite",
- "gloo-timers",
+ "gloo-timers 0.3.0",
  "kv-log-macro",
  "log",
  "memchr",
@@ -1141,6 +1141,7 @@ dependencies = [
  "bevy_input",
  "bevy_log",
  "bevy_math",
+ "bevy_pbr",
  "bevy_picking",
  "bevy_ptr",
  "bevy_reflect",
@@ -1316,16 +1317,21 @@ dependencies = [
  "criterion",
  "futures",
  "futures-intrusive",
+ "futures-lite",
  "libp2p",
  "libp2p-webrtc",
+ "libp2p-webrtc-websys",
  "pollster",
  "rand",
+ "rcgen 0.13.2",
  "serde",
  "serde_json",
  "serial_test",
  "tokio",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
+ "web-time",
  "winit",
 ]
 
@@ -1401,7 +1407,7 @@ dependencies = [
  "naga_oil",
  "nonmax",
  "offset-allocator",
- "send_wrapper",
+ "send_wrapper 0.6.0",
  "serde",
  "smallvec",
  "wasm-bindgen",
@@ -3124,6 +3130,10 @@ name = "futures-timer"
 version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f288b0a4f20f9a56b5d1da57e2227c661b7b16168e2f72365f57b63326e29b24"
+dependencies = [
+ "gloo-timers 0.2.6",
+ "send_wrapper 0.4.0",
+]
 
 [[package]]
 name = "futures-util"
@@ -3242,6 +3252,18 @@ name = "glob"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
+
+[[package]]
+name = "gloo-timers"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b995a66bb87bebce9a0f4a95aed01daca4872c050bfcb21653361c03bc35e5c"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
+]
 
 [[package]]
 name = "gloo-timers"
@@ -3590,9 +3612,9 @@ checksum = "7d71d3574edd2771538b901e6549113b4006ece66150fb69c0fb6d9a2adae946"
 
 [[package]]
 name = "hyper"
-version = "1.5.2"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "256fb8d4bd6413123cc9d91832d78325c48ff41677595be797d90f42969beae0"
+checksum = "cc2b571658e38e0c01b1fdca3bbbe93c00d3d71693ff2770043f8c29bc7d6f80"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -4446,6 +4468,7 @@ dependencies = [
  "fnv",
  "futures",
  "futures-timer",
+ "getrandom",
  "libp2p-core",
  "libp2p-identity",
  "libp2p-swarm-derive",
@@ -4456,6 +4479,7 @@ dependencies = [
  "smallvec",
  "tokio",
  "tracing",
+ "wasm-bindgen-futures",
  "web-time",
 ]
 
@@ -4498,7 +4522,7 @@ dependencies = [
  "futures-rustls",
  "libp2p-core",
  "libp2p-identity",
- "rcgen",
+ "rcgen 0.11.3",
  "ring 0.17.8",
  "rustls 0.23.21",
  "rustls-webpki 0.101.7",
@@ -4539,7 +4563,7 @@ dependencies = [
  "libp2p-webrtc-utils",
  "multihash",
  "rand",
- "rcgen",
+ "rcgen 0.11.3",
  "stun 0.7.0",
  "thiserror 2.0.11",
  "tokio",
@@ -4569,6 +4593,28 @@ dependencies = [
  "sha2",
  "tinytemplate",
  "tracing",
+]
+
+[[package]]
+name = "libp2p-webrtc-websys"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3830f0bf6f0f16ded2c735599fe70baea43a8c1a2d76152216693329217301dd"
+dependencies = [
+ "bytes",
+ "futures",
+ "getrandom",
+ "hex",
+ "js-sys",
+ "libp2p-core",
+ "libp2p-identity",
+ "libp2p-webrtc-utils",
+ "send_wrapper 0.6.0",
+ "thiserror 2.0.11",
+ "tracing",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -4602,7 +4648,7 @@ dependencies = [
  "futures",
  "js-sys",
  "libp2p-core",
- "send_wrapper",
+ "send_wrapper 0.6.0",
  "thiserror 2.0.11",
  "tracing",
  "wasm-bindgen",
@@ -4623,7 +4669,7 @@ dependencies = [
  "multiaddr",
  "multihash",
  "once_cell",
- "send_wrapper",
+ "send_wrapper 0.6.0",
  "thiserror 2.0.11",
  "tracing",
  "wasm-bindgen",
@@ -6008,6 +6054,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rcgen"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75e669e5202259b5314d1ea5397316ad400819437857b90861765f24c4cf80a2"
+dependencies = [
+ "pem",
+ "ring 0.17.8",
+ "rustls-pki-types",
+ "time",
+ "yasna",
+]
+
+[[package]]
 name = "read-fonts"
 version = "0.22.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6456,6 +6515,12 @@ name = "semver"
 version = "1.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f79dfe2d285b0488816f30e700a7438c5a73d816b5b7d3ac72fbc48b0d185e03"
+
+[[package]]
+name = "send_wrapper"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f638d531eccd6e23b980caf34876660d38e265409d8e99b397ab71eb3612fad0"
 
 [[package]]
 name = "send_wrapper"
@@ -7749,7 +7814,7 @@ dependencies = [
  "log",
  "pem",
  "rand",
- "rcgen",
+ "rcgen 0.11.3",
  "regex",
  "ring 0.16.20",
  "rtcp",
@@ -7813,7 +7878,7 @@ dependencies = [
  "pem",
  "rand",
  "rand_core",
- "rcgen",
+ "rcgen 0.11.3",
  "ring 0.16.20",
  "rustls 0.21.12",
  "sec1",

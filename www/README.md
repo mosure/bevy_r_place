@@ -5,7 +5,7 @@
 to build wasm run:
 
 ```bash
-cargo build --target wasm32-unknown-unknown --release --no-default-features --features "web"
+cargo build --target wasm32-unknown-unknown --release --no-default-features --features=web,viewer
 ```
 
 to generate bindings:

@@ -17,12 +17,22 @@ impl Default for ColorPicker {
     }
 }
 
+fn random_color() -> Color {
+    Color::srgb(
+        rand::random::<f32>(),
+        rand::random::<f32>(),
+        rand::random::<f32>(),
+    )
+}
+
 #[derive(Default)]
 pub struct ColorPickerPlugin;
 impl Plugin for ColorPickerPlugin {
     fn build(&self, app: &mut App) {
         app
-            .init_resource::<ColorPicker>()
+            .insert_resource(ColorPicker {
+                color: random_color(),
+            })
             .register_type::<ColorPicker>()
             .add_plugins(ResourceInspectorPlugin::<ColorPicker>::default());
     }

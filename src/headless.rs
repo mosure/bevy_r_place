@@ -1,10 +1,14 @@
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    log::LogPlugin,
+};
 
 
 #[derive(Default)]
 pub struct HeadlessPlugin;
 impl Plugin for HeadlessPlugin {
-    fn build(&self, _app: &mut App) {
-        // TODO: setup app without windowing
+    fn build(&self, app: &mut App) {
+        app.add_plugins(LogPlugin::default());
+        app.add_plugins(MinimalPlugins);
     }
 }

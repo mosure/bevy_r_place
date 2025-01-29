@@ -20,7 +20,7 @@ use crate::{
         ColorPickerPlugin,
     },
     network::PixelUpdateMsg,
-    window_icon::WindowIconPlugin,
+    time::epoch_time_seconds,
 };
 
 
@@ -80,7 +80,7 @@ pub fn local_input_system(
             let owner = [0; 32];
 
             // TODO: convert to lamport clock
-            let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+            let timestamp = epoch_time_seconds();
 
             let pixel = Pixel {
                 r: color[0],
@@ -100,7 +100,7 @@ pub fn local_input_system(
                 timestamp,
                 owner,
             };
-            net.outbound_tx.send_blocking(msg).ok();
+            net.outbound_tx.try_send(msg).ok();
         }
     }
 }
@@ -180,7 +180,6 @@ impl Plugin for ViewerPlugin {
             )
             .add_plugins(ColorPickerPlugin)
             .add_plugins(PanCamPlugin::default())
-            .add_plugins(WindowIconPlugin::new("images/bevy_r_place.png"))
             .insert_resource(CanvasSink::default())
             .add_systems(Startup, setup_ui)
             .add_systems(Update, (
@@ -188,5 +187,8 @@ impl Plugin for ViewerPlugin {
                 extract_chunk_crdt,
                 local_input_system,
             ));
+
+        #[cfg(all(feature = "native", feature = "viewer"))]
+        app.add_plugins(crate::window_icon::WindowIconPlugin::new("images/bevy_r_place.png"));
     }
 }

@@ -13,6 +13,8 @@ use bevy::{
 };
 use serde::{Serialize, Deserialize};
 
+use crate::time::epoch_time_seconds;
+
 
 pub const CHUNK_SIZE: u32 = 64;
 pub const WORLD_WIDTH: u32 = 1024;
@@ -171,10 +173,7 @@ pub struct CanvasRequest {
 impl Default for CanvasRequest {
     fn default() -> Self {
         Self {
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: epoch_time_seconds(),
         }
     }
 }

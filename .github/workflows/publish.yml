@@ -1,0 +1,45 @@
+name: publish-docker-image
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: brndnmtthws/rust-action@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+          enable-sccache: "false"
+
+      - name: Build release binary
+        run: cargo build --release --no-default-features --features native
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+    #   - name: "Extract metadata (tags, labels) for Docker"
+    #     id: "meta"
+    #     uses: "docker/metadata-action@v4"
+    #     with:
+    #       images: "${{ github.actor }}/bevy_r_place"
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ github.actor }}/bevy_r_place:latest

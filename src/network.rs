@@ -16,6 +16,7 @@ use libp2p::{
     swarm::Swarm,
     request_response::ResponseChannel,
 };
+use rand::Rng;
 use serde::{Serialize, Deserialize};
 
 use crate::chunk_crdt::{
@@ -49,10 +50,16 @@ pub struct BevyPlaceNodeConfig {
     pub quic_port: u16,
     pub tcp_port: u16,
     pub webrtc_port: u16,
+    pub ws_port: u16,
+    pub ws_path: String,
+    pub wss_port: u16,
+    pub wss_path: String,
     pub addr: IpAddr,
     pub external_addr: Option<IpAddr>,
     pub bootstrap_peers: Vec<Multiaddr>,
     pub kademlia_protocol: StreamProtocol,
+    pub certificate: Option<Vec<u8>>,
+    pub private_key: Option<Vec<u8>>,
 }
 
 impl Default for BevyPlaceNodeConfig {
@@ -64,10 +71,16 @@ impl Default for BevyPlaceNodeConfig {
             quic_port: 0,
             tcp_port: 0,
             webrtc_port: 0,
+            ws_port: 0,
+            ws_path: "/".to_string(),
+            wss_port: 0,
+            wss_path: "/".to_string(),
             addr: Ipv4Addr::UNSPECIFIED.into(),
             external_addr: None,
             bootstrap_peers: vec![],
             kademlia_protocol: StreamProtocol::new("/ipfs/kad/1.0.0"),
+            certificate: None,
+            private_key: None,
         }
     }
 }
@@ -88,7 +101,10 @@ pub struct BevyPlaceNodeHandle {
 }
 
 pub struct BevyPlaceNode {
+    #[cfg(feature = "native")]
     pub swarm: Swarm<native::BevyPlaceBehavior>,
+    #[cfg(feature = "web")]
+    pub swarm: Swarm<web::BevyPlaceBehavior>,
     pub inbound_tx: Sender<PixelUpdateMsg>,
     pub outbound_rx: Receiver<PixelUpdateMsg>,
     pub inbound_canvas_tx: Sender<ChunkedCanvas>,
@@ -100,6 +116,16 @@ pub struct BevyPlaceNode {
     pub pixel_topic: gossipsub::IdentTopic,
     pub config: BevyPlaceNodeConfig,
     pub listening_addrs: Arc<Mutex<Vec<Multiaddr>>>,
+    initialized: bool,
+}
+
+
+
+fn random_data() -> Vec<u8> {
+    let mut rng = rand::thread_rng();
+    let mut data = vec![0; 32];
+    rng.fill(&mut data[..]);
+    data
 }
 
 
@@ -118,6 +144,7 @@ mod native {
     use bevy::prelude::*;
     use libp2p::{
         dcutr,
+        dns,
         futures::StreamExt,
         gossipsub,
         identify,
@@ -131,16 +158,19 @@ mod native {
         request_response,
         swarm::{NetworkBehaviour, SwarmEvent},
         tcp,
+        tls,
+        Transport,
         yamux,
         Multiaddr,
         PeerId,
         StreamProtocol,
         SwarmBuilder,
+        websocket,
     };
     // TODO: copy https://github.com/libp2p/universal-connectivity/blob/main/rust-peer/src/main.rs#L311
-    use libp2p_webrtc as webrtc;
-    use libp2p_webrtc::tokio::Certificate;
-    use rand::Rng;
+    // use libp2p_webrtc as webrtc;
+    // use libp2p_webrtc::tokio::Certificate;
+    use rcgen::generate_simple_self_signed;
     use tokio::{
         io,
         select,
@@ -156,6 +186,7 @@ mod native {
         WORLD_WIDTH,
     };
     use super::{
+        random_data,
         BevyPlaceNode,
         BevyPlaceNodeConfig,
         BevyPlaceNodeHandle,
@@ -177,15 +208,9 @@ mod native {
         pub request_response: request_response::Behaviour<Codec<CanvasRequest, CanvasResponse>>,
     }
 
-    fn random_data() -> Vec<u8> {
-        let mut rng = rand::thread_rng();
-        let mut data = vec![0; 32];
-        rng.fill(&mut data[..]);
-        data
-    }
-
     pub async fn build_node(
         config: BevyPlaceNodeConfig,
+        // metric_registry: Registry,  // TODO: accept prometheus registry
     ) -> Result<(BevyPlaceNode, BevyPlaceNodeHandle), Box<dyn Error>>  {
         let (inbound_tx, inbound_rx) = unbounded::<PixelUpdateMsg>();
         let (outbound_tx, outbound_rx) = unbounded::<PixelUpdateMsg>();
@@ -195,20 +220,51 @@ mod native {
         let (canvas_request_tx, canvas_request_rx) = unbounded::<request_response::ResponseChannel<CanvasResponse>>();
         let (canvas_response_tx, canvas_response_rx) = unbounded::<(request_response::ResponseChannel<CanvasResponse>, ChunkedCanvas)>();
 
+        // let mut metric_registry = Registry::default();
+
         let mut swarm = SwarmBuilder::with_new_identity()
             .with_tokio()
             .with_tcp(
                 tcp::Config::default(),
-                noise::Config::new,
+                (tls::Config::new, noise::Config::new),
                 yamux::Config::default,
             )?
             .with_quic()
+            .with_other_transport(|local_key| {
+                let base_transport = dns::tokio::Transport::system(
+                        tcp::tokio::Transport::new(tcp::Config::default())
+                    )
+                    .unwrap();
+
+                // TODO: read certs from config if they exist
+                let rcgen_cert = generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+                let priv_key = websocket::tls::PrivateKey::new(rcgen_cert.key_pair.serialize_der());
+                let cert = websocket::tls::Certificate::new(rcgen_cert.cert.der().to_vec());
+
+                let tls_config = websocket::tls::Config::new(priv_key, vec![cert])?;
+
+                let mut transport = websocket::WsConfig::new(
+                    base_transport,
+                );
+
+                transport.set_tls_config(tls_config);
+
+                let noise_config = noise::Config::new(local_key)?;
+
+                let upgraded_transport = transport
+                    .upgrade(libp2p::core::upgrade::Version::V1)
+                    .authenticate(noise_config)
+                    .multiplex(yamux::Config::default());
+
+                Ok(upgraded_transport)
+            })?
             .with_dns()?
             .with_websocket(
-                noise::Config::new,
+                (tls::Config::new, noise::Config::new),
                 yamux::Config::default
             ).await?
             .with_relay_client(noise::Config::new, yamux::Config::default)?
+            // .with_bandwidth_metrics(&mut metric_registry)
             .with_behaviour(|key, relay| {
                 let local_peer_id = key.public().to_peer_id();
 
@@ -292,6 +348,22 @@ mod native {
             .with(Protocol::QuicV1);
         swarm.listen_on(quic_addr)?;
 
+        let ws_addr = Multiaddr::from(config.addr)
+            .with(Protocol::Tcp(config.ws_port))
+            .with(Protocol::Ws(config.ws_path.clone().into()));
+        swarm.listen_on(ws_addr)?;
+
+        let wss_addr = Multiaddr::from(config.addr)
+            .with(Protocol::Tcp(config.wss_port))
+            .with(Protocol::Wss(config.wss_path.clone().into()));
+        swarm.listen_on(wss_addr)?;
+
+        let wss_addr = Multiaddr::from(config.addr)
+            .with(Protocol::Tcp(config.wss_port))
+            .with(Protocol::Tls)
+            .with(Protocol::Ws(config.wss_path.clone().into()));
+        swarm.listen_on(wss_addr)?;
+
         // TODO: listen on webrtc when it's ready
         // let webrtc_addr = Multiaddr::from(config.addr)
         //     .with(Protocol::Udp(config.webrtc_port))
@@ -309,6 +381,13 @@ mod native {
 
         let listening_addrs = Arc::new(Mutex::new(vec![]));
 
+        let initialized = config.bootstrap_peers.is_empty();
+        for peer in config.bootstrap_peers.iter() {
+            if let Err(e) = swarm.dial(peer.clone()) {
+                info!("failed to dial bootstrap {peer:?}: {e}");
+            }
+        }
+
         Ok((
             BevyPlaceNode {
                 inbound_tx,
@@ -323,6 +402,7 @@ mod native {
                 pixel_topic: pixel_topic.clone(),
                 config,
                 listening_addrs: listening_addrs.clone(),
+                initialized,
             },
             BevyPlaceNodeHandle {
                 inbound_rx,
@@ -343,14 +423,6 @@ mod native {
         let chunk_hash = node.chunk_topic.hash();
         let peer_hash = node.peer_topic.hash();
         let pixel_hash = node.pixel_topic.hash();
-
-        let mut initialized = node.config.bootstrap_peers.is_empty();
-
-        for peer in node.config.bootstrap_peers {
-            if let Err(e) = node.swarm.dial(peer.clone()) {
-                info!("failed to dial bootstrap {peer:?}: {e}");
-            }
-        }
 
         loop {
             select! {
@@ -402,7 +474,7 @@ mod native {
                             } else if message.topic == chunk_hash {
                                 info!("peer {:?} has canvas history", message.source);
 
-                                if !initialized {
+                                if !node.initialized {
                                     let request_id = node.swarm
                                         .behaviour_mut()
                                         .request_response
@@ -428,7 +500,7 @@ mod native {
                                 .await
                                 .expect("failed to send subscription");
 
-                            if initialized && topic == chunk_hash {
+                            if node.initialized && topic == chunk_hash {
                                 info!("notifying peer {peer_id} that canvas history is available");
                                 node.swarm
                                     .behaviour_mut()
@@ -566,7 +638,7 @@ mod native {
                         )) => match message {
                             request_response::Message::Request { channel, .. } => {
                                 info!("received canvas history request");
-                                if initialized {
+                                if node.initialized {
                                     node.canvas_request_tx
                                         .send(channel)
                                         .await
@@ -582,7 +654,7 @@ mod native {
                                     .await
                                     .expect("failed to send canvas response");
 
-                                initialized = true;
+                                    node.initialized = true;
                             }
                         },
                         SwarmEvent::Behaviour(BevyPlaceBehaviorEvent::RequestResponse(
@@ -617,8 +689,515 @@ mod native {
 
 
 
+#[cfg(feature = "web")]
 mod web {
+    use std::{
+        collections::hash_map::DefaultHasher,
+        error::Error,
+        hash::{Hash, Hasher},
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
 
+    use async_channel::unbounded;
+    use bevy::prelude::*;
+    use futures::{FutureExt, select};
+    use libp2p::{
+        connection_limits,
+        core::upgrade::Version,
+        dcutr,
+        futures::StreamExt,
+        gossipsub,
+        identify,
+        kad,
+        noise,
+        ping,
+        relay,
+        request_response,
+        swarm::{NetworkBehaviour, SwarmEvent},
+        yamux,
+        PeerId,
+        StreamProtocol,
+        SwarmBuilder,
+        Transport as _,
+        websocket_websys,
+        webtransport_websys,
+    };
+    use tokio::io;
+
+    use crate::chunk_crdt::{
+        CanvasRequest,
+        CanvasResponse,
+        ChunkedCanvas,
+        codec::Codec,
+        CHUNK_SIZE,
+        WORLD_HEIGHT,
+        WORLD_WIDTH,
+    };
+    use super::{
+        random_data,
+        BevyPlaceNode,
+        BevyPlaceNodeConfig,
+        BevyPlaceNodeHandle,
+        Pixel,
+        PixelUpdateMsg,
+    };
+
+
+    #[derive(NetworkBehaviour)]
+    pub struct BevyPlaceBehavior {
+        pub dcutr: dcutr::Behaviour,
+        pub gossipsub: gossipsub::Behaviour,
+        pub identify: identify::Behaviour,
+        pub kademlia: kad::Behaviour<kad::store::MemoryStore>,
+        pub limits: connection_limits::Behaviour,
+        // pub mdns: mdns::tokio::Behaviour,
+        pub ping: ping::Behaviour,
+        pub relay: relay::client::Behaviour,
+        pub request_response: request_response::Behaviour<Codec<CanvasRequest, CanvasResponse>>,
+    }
+
+    pub async fn build_node(
+        config: BevyPlaceNodeConfig,
+    ) -> Result<(BevyPlaceNode, BevyPlaceNodeHandle), Box<dyn Error>>  {
+        let (inbound_tx, inbound_rx) = unbounded::<PixelUpdateMsg>();
+        let (outbound_tx, outbound_rx) = unbounded::<PixelUpdateMsg>();
+        let (sub_tx, sub_rx) = unbounded::<PeerId>();
+
+        let (inbound_canvas_tx, inbound_canvas_rx) = unbounded::<ChunkedCanvas>();
+        let (canvas_request_tx, canvas_request_rx) = unbounded::<request_response::ResponseChannel<CanvasResponse>>();
+        let (canvas_response_tx, canvas_response_rx) = unbounded::<(request_response::ResponseChannel<CanvasResponse>, ChunkedCanvas)>();
+
+        let mut swarm = SwarmBuilder::with_new_identity()
+            .with_wasm_bindgen()
+            .with_other_transport(|local_key| {
+                Ok(websocket_websys::Transport::default()
+                    .upgrade(Version::V1Lazy)
+                    .authenticate(
+                        noise::Config::new(&local_key)
+                            .expect("failed to initialise noise"),
+                    )
+                    .multiplex(yamux::Config::default()))
+            })?
+            .with_other_transport(|local_key| {
+                webtransport_websys::Transport::new(webtransport_websys::Config::new(
+                    &local_key,
+                ))
+            })?
+            // .with_tcp(
+            //     tcp::Config::default(),
+            //     noise::Config::new,
+            //     yamux::Config::default,
+            // )?
+            // .with_quic()
+            // .with_dns()?
+            // .with_websocket(
+            //     noise::Config::new,
+            //     yamux::Config::default
+            // ).await?
+            .with_relay_client(noise::Config::new, yamux::Config::default)?
+            .with_behaviour(|key, relay| {
+                let local_peer_id = key.public().to_peer_id();
+
+                let dcutr = dcutr::Behaviour::new(local_peer_id);
+
+                let message_id_fn = |message: &gossipsub::Message| {
+                    let mut hasher = DefaultHasher::new();
+                    message.data.hash(&mut hasher);
+                    gossipsub::MessageId::from(hasher.finish().to_string())
+                };
+
+                let gossipsub_config = gossipsub::ConfigBuilder::default()
+                    .heartbeat_interval(Duration::from_secs(10))
+                    .validation_mode(gossipsub::ValidationMode::Strict)
+                    .message_id_fn(message_id_fn)
+                    .build()
+                    .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+
+                let gossipsub = gossipsub::Behaviour::new(
+                    gossipsub::MessageAuthenticity::Signed(key.clone()),
+                    gossipsub_config,
+                )?;
+
+                let identify = identify::Behaviour::new(
+                    identify::Config::new("/ipfs/0.1.0".into(), key.public())
+                        .with_interval(Duration::from_secs(60)),
+                );
+
+                let kad_config = kad::Config::new(config.kademlia_protocol.clone());
+                let kad_store = kad::store::MemoryStore::new(local_peer_id);
+                let kademlia = kad::Behaviour::with_config(
+                    local_peer_id,
+                    kad_store,
+                    kad_config,
+                );
+
+                let limits = connection_limits::Behaviour::new(
+                    connection_limits::ConnectionLimits::default()
+                        .with_max_established(25.into())
+                );
+
+                // let mdns = mdns::tokio::Behaviour::new(
+                //     mdns::Config::default(),
+                //     key.public().to_peer_id(),
+                // )?;
+
+                let ping = ping::Behaviour::new(ping::Config::new());
+
+                // TODO: only request visible chunks (lowering max response size requirement)
+                // TODO: use a custom codec copy for now, until https://github.com/libp2p/rust-libp2p/pull/5830 releases
+                let max_response_size = (std::mem::size_of::<Pixel>() * WORLD_WIDTH as usize * WORLD_HEIGHT as usize
+                    + (WORLD_WIDTH / CHUNK_SIZE * WORLD_HEIGHT / CHUNK_SIZE * 8) as usize) * 2;
+                let canvas_codec = Codec::<CanvasRequest, CanvasResponse>::default()
+                    .set_response_size_maximum(max_response_size as u64);
+                let request_response = request_response::Behaviour::with_codec(
+                    canvas_codec,
+                    std::iter::once((
+                        StreamProtocol::new("/bevy-r-place-chunks/1"),
+                        request_response::ProtocolSupport::Full,
+                    )),
+                    request_response::Config::default().with_request_timeout(Duration::from_secs(30)),
+                );
+
+                Ok(BevyPlaceBehavior {
+                    dcutr,
+                    gossipsub,
+                    identify,
+                    kademlia,
+                    limits,
+                    // mdns,
+                    ping,
+                    relay,
+                    request_response,
+                })
+            })?
+            .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(5)))
+            .build();
+
+        // let tcp_addr = Multiaddr::from(config.addr)
+        //     .with(Protocol::Tcp(config.tcp_port));
+        // swarm.listen_on(tcp_addr)?;
+
+        // let quic_addr = Multiaddr::from(config.addr)
+        //     .with(Protocol::Udp(config.quic_port))
+        //     .with(Protocol::QuicV1);
+        // swarm.listen_on(quic_addr)?;
+
+        // TODO: listen on webrtc when it's ready
+        // let webrtc_addr = Multiaddr::from(config.addr)
+        //     .with(Protocol::Udp(config.webrtc_port))
+        //     .with(Protocol::WebRTCDirect);
+        // swarm.listen_on(webrtc_addr)?;
+
+        // TODO: browser listening doesn't seem to work generally
+        // swarm.listen_on(
+        //     Multiaddr::from(config.addr)
+        //         .with(Protocol::Udp(config.quic_port))
+        //         .with(Protocol::QuicV1)
+        //         .with(Protocol::WebTransport)
+        // )?;
+
+        let chunk_topic = gossipsub::IdentTopic::new(&config.chunk_topic);
+        swarm.behaviour_mut().gossipsub.subscribe(&chunk_topic)?;
+
+        let peer_topic = gossipsub::IdentTopic::new(&config.peer_topic);
+        swarm.behaviour_mut().gossipsub.subscribe(&peer_topic)?;
+
+        let pixel_topic = gossipsub::IdentTopic::new(&config.pixel_topic);
+        swarm.behaviour_mut().gossipsub.subscribe(&pixel_topic)?;
+
+        let listening_addrs = Arc::new(Mutex::new(vec![]));
+
+        let initialized = config.bootstrap_peers.is_empty();
+        for peer in config.bootstrap_peers.iter() {
+            if let Err(e) = swarm.dial(peer.clone()) {
+                info!("failed to dial bootstrap {peer:?}: {e}");
+            }
+        }
+
+        Ok((
+            BevyPlaceNode {
+                inbound_tx,
+                outbound_rx,
+                canvas_request_tx,
+                canvas_response_rx,
+                inbound_canvas_tx,
+                sub_tx,
+                swarm,
+                chunk_topic: chunk_topic.clone(),
+                peer_topic: peer_topic.clone(),
+                pixel_topic: pixel_topic.clone(),
+                config,
+                listening_addrs: listening_addrs.clone(),
+                initialized,
+            },
+            BevyPlaceNodeHandle {
+                inbound_rx,
+                outbound_tx,
+                canvas_request_rx,
+                canvas_response_tx,
+                inbound_canvas_rx,
+                sub_rx,
+                chunk_topic,
+                peer_topic,
+                pixel_topic,
+                listening_addrs,
+            },
+        ))
+    }
+
+    pub async fn run_swarm_task(mut node: BevyPlaceNode) {
+        let chunk_hash = node.chunk_topic.hash();
+        let peer_hash = node.peer_topic.hash();
+        let pixel_hash = node.pixel_topic.hash();
+
+        let mut fused_outbound_rx = Box::pin(node.outbound_rx.recv());
+        let mut fused_canvas_response_rx = Box::pin(node.canvas_response_rx.recv());
+
+        loop {
+            select! {
+                out_res = fused_outbound_rx.as_mut().fuse() => match out_res {
+                    Ok(msg) => {
+                        if let Ok(json) = serde_json::to_vec(&msg) {
+                            let publish = node
+                                .swarm
+                                .behaviour_mut()
+                                .gossipsub
+                                .publish(node.pixel_topic.clone(), json);
+
+                            match publish {
+                                Ok(_) => {},
+                                Err(e) => error!("failed to publish pixel update: {e:?}"),
+                            }
+                        }
+                        fused_outbound_rx.set(node.outbound_rx.recv());
+                    }
+                    Err(e) => {
+                        warn!("outbound_rx closed: {e}");
+                        break;
+                    }
+                },
+                canvas_res = fused_canvas_response_rx.as_mut().fuse() => match canvas_res {
+                    Ok((channel, canvas)) => {
+                        let publish = node.swarm
+                            .behaviour_mut()
+                            .request_response
+                            .send_response(channel, CanvasResponse { canvas });
+
+                        match publish {
+                            Ok(_) => info!("sent canvas history to peer"),
+                            Err(_) => error!("failed to send canvas history"),
+                        }
+
+                        fused_canvas_response_rx.set(node.canvas_response_rx.recv());
+                    }
+                    Err(e) => {
+                        warn!("canvas_response_rx closed: {e}");
+                        break;
+                    }
+                },
+                event = node.swarm.select_next_some() => {
+                    match event {
+                        SwarmEvent::Behaviour(BevyPlaceBehaviorEvent::Gossipsub(
+                            gossipsub::Event::Message {
+                                propagation_source: _,
+                                message_id: _,
+                                message,
+                            }
+                        )) => {
+                            if message.topic == pixel_hash {
+                                if let Ok(update) = serde_json::from_slice::<PixelUpdateMsg>(&message.data) {
+                                    node.inbound_tx
+                                        .send(update)
+                                        .await
+                                        .expect("failed to send inbound message");
+                                }
+                            } else if message.topic == chunk_hash {
+                                info!("peer {:?} has canvas history", message.source);
+
+                                if !node.initialized {
+                                    let request_id = node.swarm
+                                        .behaviour_mut()
+                                        .request_response
+                                        .send_request(
+                                            &message.source.unwrap(),
+                                            CanvasRequest::default(),
+                                        );
+
+                                    info!("sent canvas history request: {request_id:?}");
+                                }
+                            } else if message.topic == peer_hash {
+                                info!("received peer message...");
+                            } else {
+                                warn!("unknown topic: {}", message.topic);
+                            }
+                        }
+                        SwarmEvent::Behaviour(BevyPlaceBehaviorEvent::Gossipsub(
+                            gossipsub::Event::Subscribed { peer_id, topic }
+                        )) => {
+                            debug!("peer {peer_id} subscribed to topic {topic}");
+                            node.sub_tx
+                                .send(peer_id)
+                                .await
+                                .expect("failed to send subscription");
+
+                            if node.initialized && topic == chunk_hash {
+                                info!("notifying peer {peer_id} that canvas history is available");
+                                node.swarm
+                                    .behaviour_mut()
+                                    .gossipsub
+                                    .publish(node.chunk_topic.clone(), random_data())
+                                    .expect("failed to notify initialized canvas is available");
+                            }
+                        }
+                        SwarmEvent::Behaviour(BevyPlaceBehaviorEvent::Gossipsub(
+                            gossipsub::Event::Unsubscribed { peer_id, topic }
+                        )) => {
+                            debug!("peer {peer_id} unsubscribed from topic {topic}");
+                        }
+                        SwarmEvent::Behaviour(BevyPlaceBehaviorEvent::Gossipsub(
+                            gossipsub::Event::GossipsubNotSupported { peer_id }
+                        )) => {
+                            warn!("peer {peer_id} does not support Gossipsub");
+                        }
+                        SwarmEvent::Behaviour(BevyPlaceBehaviorEvent::Gossipsub(
+                            gossipsub::Event::SlowPeer { peer_id, failed_messages }
+                        )) => {
+                            debug!("peer {peer_id} is slow: {failed_messages:?}");
+                        }
+                        SwarmEvent::NewListenAddr { address, .. } => {
+                            if let Some(external_ip) = node.config.external_addr {
+                                let external_address = address
+                                    .replace(0, |_| Some(external_ip.into()))
+                                    .expect("address.len > 1 and we always return `Some`");
+
+                                node.swarm.add_external_address(external_address);
+                            }
+
+                            info!("listening on {address}");
+                            node.listening_addrs.lock().unwrap().push(address);
+                        }
+                        SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                            info!("connected to {peer_id}");
+                        }
+                        SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
+                            debug!("disconnected from {peer_id}: {cause:?}");
+                        }
+                        SwarmEvent::IncomingConnection { .. } => {
+                            debug!("incoming connection");
+                        }
+                        SwarmEvent::IncomingConnectionError { .. } => {
+                            debug!("incoming connection error");
+                        }
+                        SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
+                            debug!("outgoing connection error: {:?}: {error}", peer_id);
+                        }
+                        SwarmEvent::ExpiredListenAddr { address, .. } => {
+                            debug!("expired listen address {address}");
+                        }
+                        SwarmEvent::ListenerClosed { addresses, .. } => {
+                            debug!("listener closed on {addresses:?}");
+                        }
+                        SwarmEvent::ListenerError { error, .. } => {
+                            debug!("listener error: {error}");
+                        }
+                        SwarmEvent::Dialing { peer_id, .. } => {
+                            debug!("dialing {:?}", peer_id);
+                        }
+                        SwarmEvent::NewExternalAddrCandidate { address } => {
+                            debug!("new external address candidate {address}");
+                        }
+                        SwarmEvent::ExternalAddrConfirmed { address } => {
+                            debug!("external address confirmed {address}");
+                        }
+                        SwarmEvent::ExternalAddrExpired { address } => {
+                            debug!("external address expired {address}");
+                        }
+                        SwarmEvent::NewExternalAddrOfPeer { peer_id, address } => {
+                            debug!("new external address of {peer_id}: {address}");
+                        }
+                        SwarmEvent::Behaviour(BevyPlaceBehaviorEvent::Identify(e)) => {
+                            debug!("BevyPlaceBehaviorEvent::Identify {:?}", e);
+
+                            if let identify::Event::Error { peer_id, error, connection_id } = e {
+                                match error {
+                                    libp2p::swarm::StreamUpgradeError::Timeout => {
+                                        // When a browser tab closes, we don't get a swarm event
+                                        // maybe there's a way to get this with TransportEvent
+                                        // but for now remove the peer from routing table if there's an Identify timeout
+                                        node.swarm.behaviour_mut().kademlia.remove_peer(&peer_id);
+                                        info!("removed {peer_id} from the routing table, connection id: {connection_id}.");
+                                    }
+                                    _ => {
+                                        debug!("{error}");
+                                    }
+                                }
+                            } else if let identify::Event::Received {
+                                peer_id: _,
+                                info: identify::Info {
+                                    listen_addrs: _,
+                                    protocols: _,
+                                    observed_addr,
+                                    ..
+                                },
+                                connection_id: _,
+                            } = e
+                            {
+                                debug!("identify::Event::Received observed_addr: {}", observed_addr);
+                            }
+                        }
+                        SwarmEvent::Behaviour(BevyPlaceBehaviorEvent::RequestResponse(
+                            request_response::Event::Message { message, .. },
+                        )) => match message {
+                            request_response::Message::Request { channel, .. } => {
+                                info!("received canvas history request");
+                                if node.initialized {
+                                    node.canvas_request_tx
+                                        .send(channel)
+                                        .await
+                                        .expect("failed to send canvas request");
+                                } else {
+                                    warn!("received canvas history request but the canvas is not initialized");
+                                }
+                            }
+                            request_response::Message::Response { response, .. } => {
+                                info!("received canvas history");
+                                node.inbound_canvas_tx
+                                    .send(response.canvas)
+                                    .await
+                                    .expect("failed to send canvas response");
+
+                                node.initialized = true;
+                            }
+                        },
+                        SwarmEvent::Behaviour(BevyPlaceBehaviorEvent::RequestResponse(
+                            request_response::Event::OutboundFailure {
+                                peer, connection_id, request_id, error
+                            },
+                        )) => {
+                            error!(
+                                "request_response::Event::OutboundFailure: {:?}, {:?}, {:?}, {:?}",
+                                peer, connection_id, request_id, error
+                            );
+                        }
+                        SwarmEvent::Behaviour(BevyPlaceBehaviorEvent::RequestResponse(
+                            request_response::Event::InboundFailure {
+                                peer, connection_id, request_id, error
+                            },
+                        )) => {
+                            error!(
+                                "request_response::Event::InboundFailure: {:?}, {:?}, {:?}, {:?}",
+                                peer, connection_id, request_id, error
+                            );
+                        }
+                        _ => {
+                            debug!("unknown swarm event");
+                        }
+                    }
+                },
+            }
+        }
+    }
 }
 
 
@@ -627,6 +1206,9 @@ mod web {
 pub async fn run_swarm_task(node: BevyPlaceNode) {
     #[cfg(feature = "native")]
     native::run_swarm_task(node).await;
+
+    #[cfg(feature = "web")]
+    web::run_swarm_task(node).await;
 }
 
 
@@ -634,7 +1216,14 @@ pub async fn build_node(
     config: BevyPlaceNodeConfig,
 ) -> Result<(BevyPlaceNode, BevyPlaceNodeHandle), Box<dyn Error>>  {
     #[cfg(feature = "native")]
-    native::build_node(config).await
+    {
+        native::build_node(config).await
+    }
+
+    #[cfg(feature = "web")]
+    {
+        web::build_node(config).await
+    }
 }
 
 
@@ -655,7 +1244,7 @@ fn inbound_canvas_request_system(
 ) {
     while let Ok(channel) = net.canvas_request_rx.try_recv() {
         net.canvas_response_tx
-            .send_blocking((channel, canvas.clone()))
+            .try_send((channel, canvas.clone()))
             .ok();
     }
 }

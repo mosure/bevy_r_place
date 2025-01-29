@@ -2,7 +2,12 @@ pub mod chunk_crdt;
 pub mod color_picker;
 pub mod headless;
 pub mod network;
+pub mod time;
+
+#[cfg(feature = "viewer")]
 pub mod viewer;
+
+#[cfg(all(feature = "native", feature = "viewer"))]
 pub mod window_icon;
 
 pub use libp2p::PeerId;
@@ -24,5 +29,7 @@ pub mod prelude {
         PixelUpdateMsg,
         SwarmPlugin,
     };
+
+    #[cfg(feature = "viewer")]
     pub use crate::viewer::ViewerPlugin;
 }
