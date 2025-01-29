@@ -11,8 +11,11 @@ keywords = [
   "r-place",
 ]
 categories = [
-  "art",
-  "p2p",
+  "games",
+  "graphics",
+  "network-programming",
+  "visualization",
+  "wasm",
 ]
 homepage = "https://github.com/mosure/bevy_r_place"
 repository = "https://github.com/mosure/bevy_r_place"
