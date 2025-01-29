@@ -1,5 +1,6 @@
 [package]
 name = "bevy_r_place"
+description = "p2p r/place clone using bevy"
 version = "0.1.0"
 edition = "2021"
 authors = ["mosure <mitchell@mosure.me>"]
