@@ -1,12 +1,31 @@
 FROM alpine:latest
 
-COPY target/release/viewer /usr/local/bin/bevy_r_place_viewer
+RUN apk add --no-cache aws-cli
 
+WORKDIR /app
 
-EXPOSE 4201/udp     # QUIC
-EXPOSE 4202         # TCP
-EXPOSE 4203         # WebSocket
-EXPOSE 4204         # Secure WebSocket
-EXPOSE 4205/udp     # WebRTC
+COPY target/release/viewer /app/bevy_r_place_viewer
+COPY docker/entrypoint.sh /app/entrypoint.sh
 
-CMD ["bevy_r_place_viewer"]
+RUN chmod +x /app/entrypoint.sh
+
+# QUIC
+EXPOSE 4201/udp
+# TCP
+EXPOSE 4202
+# WebSocket
+EXPOSE 4203
+# Secure WebSocket
+EXPOSE 4204
+# WebRTC
+EXPOSE 4205/udp
+
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD [
+    "/app/bevy_r_place_viewer",
+    "--bootstrap",
+    "--headless",
+    "--certificate-chain-path", "/app/certs/certificate.der",
+    "--private-key-path",       "/app/certs/private_key.der",
+    "--webrtc-pem-certificate-path", "/app/certs/webrtc.pem"
+]
