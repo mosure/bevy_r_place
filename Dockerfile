@@ -28,5 +28,7 @@ EXPOSE 4203
 EXPOSE 4204
 # WebRTC
 EXPOSE 4205/udp
+# HTTP /health endpoint
+EXPOSE 4206
 
 CMD ["/app/bevy_r_place_viewer",  "--bootstrap", "--headless"]

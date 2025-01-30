@@ -41,6 +41,7 @@ default = [
 aws = [
   "aws-config",
   "aws-sdk-secretsmanager",
+  "axum",
 ]
 viewer = [
   "bevy/bevy_gizmos",
@@ -82,6 +83,7 @@ async-channel = "2.3"
 async-trait = "0.1"
 aws-config = { version = "1.5", optional = true }
 aws-sdk-secretsmanager = { version = "1.61", optional = true }
+axum = { version = "0.8", optional = true }
 bevy_args = "1.7"
 bevy-inspector-egui = "0.29"
 bevy_pancam = { version = "0.17", features = ["bevy_egui"] }

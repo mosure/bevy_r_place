@@ -1,10 +1,5 @@
 use std::error::Error;
 
-#[cfg(feature = "aws")]
-use aws_config::{self, BehaviorVersion, Region};
-#[cfg(feature = "aws")]
-use aws_sdk_secretsmanager;
-
 use bevy::prelude::*;
 use bevy_args::{
     parse_args,
@@ -18,6 +13,7 @@ use bevy_r_place::prelude::*;
 
 // TODO: clean this up, add better docs
 #[derive(
+    Clone,
     Debug,
     Resource,
     Serialize,
@@ -52,6 +48,9 @@ pub struct BevyPlaceConfig {
 
     #[arg(long, default_value = "4205", help = "the webrtc port to bind to")]
     pub webrtc_port: u16,
+
+    #[arg(long, default_value = "4206", help = "the health check port to bind to")]
+    pub health_check_port: u16,
 
     #[arg(long, default_value = "false", help = "whether or not this node is a bootstrap node")]
     pub bootstrap: bool,
@@ -101,6 +100,7 @@ impl Default for BevyPlaceConfig {
             wss_path: "/".to_string(),
             webrtc_pem_certificate_path: None,
             webrtc_port: 4205,
+            health_check_port: 4206,
             bootstrap: false,
             network: "".to_string(),
             bootstrap_nodes: vec![
@@ -124,6 +124,12 @@ impl Default for BevyPlaceConfig {
 async fn run_app_async() -> Result<(), Box<dyn Error>> {
     let args = parse_args::<BevyPlaceConfig>();
     log(&format!("args: {:?}", args));
+
+    #[cfg(feature = "aws")]
+    {
+        let runtime_handle = tokio::runtime::Handle::current();
+        runtime_handle.spawn(aws::http_health_check(args.clone()));
+    }
 
     let bootstrap_peers = if args.bootstrap {
         log("not connecting to any bootstrap peers!");
@@ -164,31 +170,7 @@ async fn run_app_async() -> Result<(), Box<dyn Error>> {
     };
 
     #[cfg(feature = "aws")]
-    let webrtc_pem_certificate = {
-        let secret_name = "/bevy_r_place/certs/webrtc_pem";
-        let region = Region::new("us-west-2");
-
-        let config = aws_config::defaults(BehaviorVersion::v2024_03_28())
-            .region(region)
-            .load()
-            .await;
-
-        let asm = aws_sdk_secretsmanager::Client::new(&config);
-
-        let response = asm
-            .get_secret_value()
-            .secret_id(secret_name)
-            .send()
-            .await;
-
-        if let Err(err) = response {
-            log(&format!("failed to get secret: {:?}", err));
-            None
-        } else {
-            response.unwrap().secret_string().map(String::from)
-        }
-    };
-
+    let webrtc_pem_certificate = aws::webrtc_pem_certificate().await;
     #[cfg(not(feature = "aws"))]
     let webrtc_pem_certificate = None;
 
@@ -286,5 +268,58 @@ pub fn log(_msg: &str) {
     #[cfg(not(target_arch = "wasm32"))]
     {
         println!("{}", _msg);
+    }
+}
+
+
+
+#[cfg(feature = "aws")]
+pub mod aws {
+    use aws_config::{self, BehaviorVersion, Region};
+    use aws_sdk_secretsmanager;
+    use axum::{
+        routing::get,
+        http::StatusCode,
+        Router,
+    };
+
+    pub async fn webrtc_pem_certificate() -> Option<String> {
+        let secret_name = "/bevy_r_place/certs/webrtc_pem";
+        let region = Region::new("us-west-2");
+
+        let config = aws_config::defaults(BehaviorVersion::v2024_03_28())
+            .region(region)
+            .load()
+            .await;
+
+        let asm = aws_sdk_secretsmanager::Client::new(&config);
+
+        let response = asm
+            .get_secret_value()
+            .secret_id(secret_name)
+            .send()
+            .await;
+
+        if let Err(err) = response {
+            super::log(&format!("failed to get secret: {:?}", err));
+            None
+        } else {
+            response.unwrap().secret_string().map(String::from)
+        }
+    }
+
+    pub async fn http_health_check(
+        config: super::BevyPlaceConfig,
+    ) {
+        super::log(&format!("starting health check server on {}:{}", config.address, config.health_check_port));
+
+        let app = Router::new()
+            .route("/health", get(|| async {
+                (StatusCode::OK, "ok")
+            }));
+
+        let addr = format!("{}:{}", config.address, config.health_check_port);
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+        axum::serve(listener, app).await.unwrap();
     }
 }
