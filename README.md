@@ -35,7 +35,7 @@ cargo run
 new nodes will automatically connect to mainnet, to host your own network, specify `--bootstrap-node` flag
 
 ```bash
-docker run mosure/bevy_r_place
+docker run ghcr.io/mosure/bevy_r_place:main
 ```
 
 
