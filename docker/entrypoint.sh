@@ -24,4 +24,9 @@ aws ssm get-parameter \
   --query "Parameter.Value" \
   > /app/certs/webrtc.pem
 
-exec "$@"
+
+/app/bevy_r_place_viewer --bootstrap \
+  --headless \
+  --certificate-chain-path /app/certs/certificate.der \
+  --private-key-path /app/certs/private_key.der \
+  --webrtc-pem-certificate-path /app/certs/webrtc.pem
