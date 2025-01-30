@@ -139,14 +139,13 @@ async fn test_n_nodes_with_bootstrap() {
         bootstrap_handle.listening_addrs.lock().unwrap().clone()
     };
     assert!(!bootstrap_addrs.is_empty(), "bootstrap node has no listening addresses");
-    let bootstrap_addr = bootstrap_addrs[0].clone();
 
     let mut join_handles = Vec::with_capacity(num_nodes - 1);
     let mut node_handles = Vec::with_capacity(num_nodes - 1);
 
     for i in 0..(num_nodes - 1) {
         let config = BevyPlaceNodeConfig {
-            bootstrap_peers: vec![bootstrap_addr.clone()],
+            bootstrap_peers: bootstrap_addrs.clone(),
             ..Default::default()
         };
 

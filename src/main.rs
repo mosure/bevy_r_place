@@ -146,11 +146,11 @@ async fn run_app_async() -> Result<(), Box<dyn Error>> {
 
         if args.mainnet {
             bootstrap_nodes = vec![
-                "/dns4/bevy_r_place.mosure.dev/tcp/4203/ws".parse()?,
-                "/dns4/bevy_r_place.mosure.dev/tcp/4204/wss".parse()?,
-                "/dns4/raw.bevy_r_place.mosure.dev/udp/4201/quic-v1".parse()?,
-                "/dns4/raw.bevy_r_place.mosure.dev/tcp/4202".parse()?,
-                "/dns4/raw.bevy_r_place.mosure.dev/udp/4205/webrtc-direct/certhash/uEiCMKpbQeJQuNNZSWyljeixDlNYLFllcZDX5LGGwwxTcmQ".parse()?,
+                "/dns4/bevy-r-place.mosure.dev/tcp/4203/ws".parse()?,
+                "/dns4/bevy-r-place.mosure.dev/tcp/4204/wss".parse()?,
+                "/dns4/raw.bevy-r-place.mosure.dev/udp/4201/quic-v1".parse()?,
+                "/dns4/raw.bevy-r-place.mosure.dev/tcp/4202".parse()?,
+                "/dns4/raw.bevy-r-place.mosure.dev/udp/4205/webrtc-direct/certhash/uEiCMKpbQeJQuNNZSWyljeixDlNYLFllcZDX5LGGwwxTcmQ".parse()?,
             ]
         }
 

@@ -4,7 +4,7 @@
 [![crates.io](https://img.shields.io/crates/v/bevy_r_place.svg)](https://crates.io/crates/bevy_r_place)
 
 
-p2p r/place clone, view the [web demo on mainnet](https://mosure.github.io/bevy_r_place)
+p2p r/place clone, view the [web demo on mainnet](https://mosure.github.io/bevy_r_place?mainnet=true)
 
 ![Alt text](docs/r_place.webp)
 
