@@ -1,6 +1,8 @@
 FROM debian:latest
 
-RUN apk add --no-cache aws-cli
+RUN apt-get update && \
+    apt-get install -y awscli && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
