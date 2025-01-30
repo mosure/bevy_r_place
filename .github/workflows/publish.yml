@@ -41,4 +41,4 @@ jobs:
           context: .
           file: ./docker/Dockerfile
           push: true
-          tags: ${{ github.actor }}/bevy_r_place:latest
+          tags: ghcr.io/${{ github.repository_owner }}/bevy_r_place:latest
