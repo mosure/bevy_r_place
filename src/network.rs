@@ -277,23 +277,21 @@ mod native {
             .with_other_transport(|local_key| {
                 let certificate = if let Some(pem_cert) = config.webrtc_pem_certificate.clone() {
                     webrtc::tokio::Certificate::from_pem(&pem_cert)?
-                } else {
-                    if let Some(cert_path) = config.webrtc_pem_certificate_path.clone() {
-                        let pem = if let Ok(pem) = std::fs::read_to_string(&cert_path) {
-                            pem
-                        } else {
-                            let pem = webrtc::tokio::Certificate::generate(&mut rand::thread_rng())?;
-                            let pem = pem.serialize_pem();
-
-                            std::fs::write(cert_path, &pem)?;
-
-                            pem
-                        };
-
-                        webrtc::tokio::Certificate::from_pem(&pem)?
+                } else if let Some(cert_path) = config.webrtc_pem_certificate_path.clone() {
+                    let pem = if let Ok(pem) = std::fs::read_to_string(&cert_path) {
+                        pem
                     } else {
-                        webrtc::tokio::Certificate::generate(&mut rand::thread_rng())?
-                    }
+                        let pem = webrtc::tokio::Certificate::generate(&mut rand::thread_rng())?;
+                        let pem = pem.serialize_pem();
+
+                        std::fs::write(cert_path, &pem)?;
+
+                        pem
+                    };
+
+                    webrtc::tokio::Certificate::from_pem(&pem)?
+                } else {
+                    webrtc::tokio::Certificate::generate(&mut rand::thread_rng())?
                 };
 
                 let webrtc_transport = webrtc::tokio::Transport::new(
