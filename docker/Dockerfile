@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM debian:latest
 
 RUN apk add --no-cache aws-cli
 
