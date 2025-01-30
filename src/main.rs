@@ -140,11 +140,11 @@ async fn run_app_async() -> Result<(), Box<dyn Error>> {
 
         if args.mainnet {
             bootstrap_nodes = vec![
-                "/dns4/bevy_r_place.mosure.dev/udp/4201/quic-v1".parse()?,
-                "/dns4/bevy_r_place.mosure.dev/tcp/4202".parse()?,
                 "/dns4/bevy_r_place.mosure.dev/tcp/4203/ws".parse()?,
                 "/dns4/bevy_r_place.mosure.dev/tcp/4204/wss".parse()?,
-                "/dns4/bevy_r_place.mosure.dev/udp/4205/webrtc-direct".parse()?,
+                "/dns4/raw.bevy_r_place.mosure.dev/udp/4201/quic-v1".parse()?,
+                "/dns4/raw.bevy_r_place.mosure.dev/tcp/4202".parse()?,
+                "/dns4/raw.bevy_r_place.mosure.dev/udp/4205/webrtc-direct/certhash/uEiCMKpbQeJQuNNZSWyljeixDlNYLFllcZDX5LGGwwxTcmQ".parse()?,
             ]
         }
 
@@ -179,9 +179,14 @@ async fn run_app_async() -> Result<(), Box<dyn Error>> {
             .get_secret_value()
             .secret_id(secret_name)
             .send()
-            .await?;
+            .await;
 
-        response.secret_string().map(String::from)
+        if let Err(err) = response {
+            log(&format!("failed to get secret: {:?}", err));
+            None
+        } else {
+            response.unwrap().secret_string().map(String::from)
+        }
     };
 
     #[cfg(not(feature = "aws"))]
