@@ -60,6 +60,7 @@ pub struct BevyPlaceNodeConfig {
     pub kademlia_protocol: StreamProtocol,
     pub certificate: Option<Vec<u8>>,
     pub private_key: Option<Vec<u8>>,
+    pub webrtc_pem_certificate: Option<String>,
     pub webrtc_pem_certificate_path: Option<String>,
 }
 
@@ -82,6 +83,7 @@ impl Default for BevyPlaceNodeConfig {
             kademlia_protocol: StreamProtocol::new("/ipfs/kad/1.0.0"),
             certificate: None,
             private_key: None,
+            webrtc_pem_certificate: None,
             webrtc_pem_certificate_path: None,
         }
     }
@@ -273,21 +275,25 @@ mod native {
                 Ok(upgraded_transport)
             })?
             .with_other_transport(|local_key| {
-                let certificate = if let Some(cert_path) = config.webrtc_pem_certificate_path.clone() {
-                    let pem = if let Ok(pem) = std::fs::read_to_string(&cert_path) {
-                        pem
-                    } else {
-                        let pem = webrtc::tokio::Certificate::generate(&mut rand::thread_rng())?;
-                        let pem = pem.serialize_pem();
-
-                        std::fs::write(cert_path, &pem)?;
-
-                        pem
-                    };
-
-                    webrtc::tokio::Certificate::from_pem(&pem)?
+                let certificate = if let Some(pem_cert) = config.webrtc_pem_certificate.clone() {
+                    webrtc::tokio::Certificate::from_pem(&pem_cert)?
                 } else {
-                    webrtc::tokio::Certificate::generate(&mut rand::thread_rng())?
+                    if let Some(cert_path) = config.webrtc_pem_certificate_path.clone() {
+                        let pem = if let Ok(pem) = std::fs::read_to_string(&cert_path) {
+                            pem
+                        } else {
+                            let pem = webrtc::tokio::Certificate::generate(&mut rand::thread_rng())?;
+                            let pem = pem.serialize_pem();
+
+                            std::fs::write(cert_path, &pem)?;
+
+                            pem
+                        };
+
+                        webrtc::tokio::Certificate::from_pem(&pem)?
+                    } else {
+                        webrtc::tokio::Certificate::generate(&mut rand::thread_rng())?
+                    }
                 };
 
                 let webrtc_transport = webrtc::tokio::Transport::new(

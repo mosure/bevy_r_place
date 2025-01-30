@@ -1,5 +1,10 @@
 use std::error::Error;
 
+#[cfg(feature = "aws")]
+use aws_config::{self, BehaviorVersion, Region};
+#[cfg(feature = "aws")]
+use aws_sdk_secretsmanager;
+
 use bevy::prelude::*;
 use bevy_args::{
     parse_args,
@@ -158,6 +163,30 @@ async fn run_app_async() -> Result<(), Box<dyn Error>> {
         None
     };
 
+    #[cfg(feature = "aws")]
+    let webrtc_pem_certificate = {
+        let secret_name = "/bevy_r_place/certs/webrtc_pem";
+        let region = Region::new("us-west-2");
+
+        let config = aws_config::defaults(BehaviorVersion::v2024_03_28())
+            .region(region)
+            .load()
+            .await;
+
+        let asm = aws_sdk_secretsmanager::Client::new(&config);
+
+        let response = asm
+            .get_secret_value()
+            .secret_id(secret_name)
+            .send()
+            .await?;
+
+        response.secret_string().map(String::from)
+    };
+
+    #[cfg(not(feature = "aws"))]
+    let webrtc_pem_certificate = None;
+
     let (node, node_handle) = build_node(
         BevyPlaceNodeConfig {
             addr: args.address.parse()?,
@@ -171,6 +200,7 @@ async fn run_app_async() -> Result<(), Box<dyn Error>> {
             certificate,
             private_key,
             webrtc_port: args.webrtc_port,
+            webrtc_pem_certificate,
             webrtc_pem_certificate_path: args.webrtc_pem_certificate_path,
             ..default()
         }

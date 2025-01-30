@@ -5,9 +5,6 @@ RUN apk add --no-cache aws-cli
 WORKDIR /app
 
 COPY target/release/viewer /app/bevy_r_place_viewer
-COPY docker/entrypoint.sh /app/entrypoint.sh
-
-RUN chmod +x /app/entrypoint.sh
 
 # QUIC
 EXPOSE 4201/udp
@@ -20,4 +17,4 @@ EXPOSE 4204
 # WebRTC
 EXPOSE 4205/udp
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["/app/bevy_r_place_viewer",  "--bootstrap", "--headless"]
