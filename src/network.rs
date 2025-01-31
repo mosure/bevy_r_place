@@ -19,18 +19,11 @@ use libp2p::{
 use rand::Rng;
 use serde::{Serialize, Deserialize};
 
-use crate::{
-    args::BevyPlaceConfig,
-    chunk_crdt::{
-        Pixel,
-        CanvasResponse,
-        ChunkedCanvas,
-    },
+use crate::chunk_crdt::{
+    Pixel,
+    CanvasResponse,
+    ChunkedCanvas,
 };
-
-
-pub const PORT_WEBRTC: u16 = 9090;
-pub const PORT_QUIC: u16 = 9091;
 
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -473,6 +466,7 @@ mod native {
         loop {
             select! {
                 Ok(msg) = node.outbound_rx.recv() => {
+                    // TODO: use binary encoding
                     if let Ok(json) = serde_json::to_vec(&msg) {
                         let publish = node.swarm
                             .behaviour_mut()
@@ -1284,19 +1278,9 @@ pub async fn build_node(
 fn inbound_canvas_system(
     mut world_canvas: ResMut<ChunkedCanvas>,
     net: Res<BevyPlaceNodeHandle>,
-    _config: Res<BevyPlaceConfig>,
 ) {
-    let mut received_canvas = false;
     while let Ok(canvas) = net.inbound_canvas_rx.try_recv() {
         *world_canvas = canvas;
-        received_canvas = true;
-    }
-
-    if received_canvas {
-        debug!("canvas updated from network");
-
-        #[cfg(feature = "native")]
-        crate::snapshot::canvas_snapshot(&world_canvas, &_config);
     }
 }
 
@@ -1316,6 +1300,8 @@ fn inbound_canvas_request_system(
 fn inbound_pixel_update_system(
     mut canvas: ResMut<ChunkedCanvas>,
     net: Res<BevyPlaceNodeHandle>,
+    #[cfg(feature = "native")]
+    mut pixel_artifact_stream: ResMut<crate::snapshot::PixelArtifactStream>,
 ) {
     while let Ok(update) = net.inbound_rx.try_recv() {
         let pixel = Pixel {
@@ -1336,7 +1322,10 @@ fn inbound_pixel_update_system(
             debug!("ignored older or out-of-bounds update from network at ({},{}).", update.x, update.y);
         }
 
-        // TODO: manage periodic chunk storing
+        #[cfg(feature = "native")]
+        {
+            pixel_artifact_stream.write_msg(&update).ok();
+        }
     }
 }
 

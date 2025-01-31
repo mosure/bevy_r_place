@@ -77,10 +77,13 @@ pub struct BevyPlaceConfig {
     pub artifact_s3_bucket: Option<String>,
 
     #[arg(long, default_value = None, help = "store backup snapshots to disk")]
-    pub artifact_folder: Option<String>,
+    pub artifact_directory: Option<String>,
 
     #[arg(long, default_value = None, help = "snapshot interval in seconds")]
     pub snapshot_interval_seconds: Option<u64>,
+
+    #[arg(long, default_value = None, help = "size of pixel artifact stream chunks in MB")]
+    pub pixel_artifact_stream_chunk_mb: Option<u64>,
 
     // TODO: support seamless bootstrap node reboots via anchor/pseudo-bootstrap nodes
     #[arg(long, default_value = "false", help = "restore latest snapshot from provided artifact source, for network cold starts")]
@@ -119,8 +122,9 @@ impl Default for BevyPlaceConfig {
             headless: false,
             mainnet: false,
             artifact_s3_bucket: None,
-            artifact_folder: None,
+            artifact_directory: None,
             snapshot_interval_seconds: None,
+            pixel_artifact_stream_chunk_mb: None,
             restore_latest_snapshot: false,
             certificate_chain_path: None,
             private_key_path: None,

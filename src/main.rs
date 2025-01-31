@@ -116,6 +116,8 @@ async fn run_app_async() -> Result<(), Box<dyn Error>> {
 
     #[cfg(feature = "native")]
     app.add_plugins(SnapshotPlugin {
+        artifact_directory: args.artifact_directory.clone().map(std::path::PathBuf::from),
+        pixel_artifact_stream_chunk_mb: args.pixel_artifact_stream_chunk_mb,
         snapshot_interval: args.snapshot_interval_seconds.map(std::time::Duration::from_secs),
     });
 
