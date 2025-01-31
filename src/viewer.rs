@@ -106,6 +106,7 @@ pub fn local_input_system(
 }
 
 
+// TODO: make mobile view-only? or support a better placement method + touch screen pan/zoom
 fn setup_ui(
     canvas: Res<ChunkedCanvas>,
     mut commands: Commands,

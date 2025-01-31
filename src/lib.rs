@@ -1,7 +1,9 @@
+pub mod args;
 pub mod chunk_crdt;
 pub mod color_picker;
 pub mod headless;
 pub mod network;
+pub mod snapshot;
 pub mod time;
 
 #[cfg(feature = "viewer")]
@@ -14,6 +16,7 @@ pub use libp2p::PeerId;
 
 
 pub mod prelude {
+    pub use crate::args::BevyPlaceConfig;
     pub use crate::chunk_crdt::{
         ChunkedCanvas,
         WORLD_HEIGHT,
@@ -29,6 +32,7 @@ pub mod prelude {
         PixelUpdateMsg,
         SwarmPlugin,
     };
+    pub use crate::snapshot::SnapshotPlugin;
 
     #[cfg(feature = "viewer")]
     pub use crate::viewer::ViewerPlugin;

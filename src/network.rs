@@ -19,10 +19,14 @@ use libp2p::{
 use rand::Rng;
 use serde::{Serialize, Deserialize};
 
-use crate::chunk_crdt::{
-    Pixel,
-    CanvasResponse,
-    ChunkedCanvas,
+use crate::{
+    args::BevyPlaceConfig,
+    chunk_crdt::{
+        Pixel,
+        CanvasResponse,
+        ChunkedCanvas,
+    },
+    snapshot::canvas_snapshot,
 };
 
 
@@ -1281,9 +1285,16 @@ pub async fn build_node(
 fn inbound_canvas_system(
     mut world_canvas: ResMut<ChunkedCanvas>,
     net: Res<BevyPlaceNodeHandle>,
+    config: Res<BevyPlaceConfig>,
 ) {
+    let mut received_canvas = false;
     while let Ok(canvas) = net.inbound_canvas_rx.try_recv() {
         *world_canvas = canvas;
+        received_canvas = true;
+    }
+
+    if received_canvas {
+        canvas_snapshot(&world_canvas, &config);
     }
 }
 

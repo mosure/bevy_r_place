@@ -9,6 +9,7 @@ out/
 
 .DS_Store
 
+artifact/
 certs/
 deploy/
 screenshots/
