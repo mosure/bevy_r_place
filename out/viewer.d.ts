@@ -16,13 +16,13 @@ export interface InitOutput {
   readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h62c82a93d247b9ea: (a: number, b: number) => void;
   readonly closure7290_externref_shim: (a: number, b: number, c: any) => void;
   readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h957872ef4b637e71: (a: number, b: number) => void;
-  readonly closure48274_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure48354_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure50356_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure51638_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure48301_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure48381_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure50367_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure51649_externref_shim: (a: number, b: number, c: any) => void;
   readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h55dd773db8b2c745: (a: number, b: number) => void;
   readonly _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h2a260e77ba3ab52e: (a: number, b: number, c: number) => void;
-  readonly closure51654_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure51665_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 
