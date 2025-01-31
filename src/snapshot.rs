@@ -46,8 +46,13 @@ impl Plugin for SnapshotPlugin {
             app
                 .add_systems(
                     Update,
-                    snapshot_interval_system.run_if(
-                        on_timer(snapshot_interval)
+                    (
+                        snapshot_interval_system.run_if(
+                            on_timer(snapshot_interval)
+                        ),
+                        flush_pixel_artifact_stream.run_if(
+                            on_timer(std::time::Duration::from_secs(120)),
+                        ),
                     )
                 );
         }
@@ -166,5 +171,14 @@ impl PixelArtifactStream {
         }
 
         Ok(())
+    }
+}
+
+
+fn flush_pixel_artifact_stream(
+    mut stream: ResMut<PixelArtifactStream>,
+) {
+    if let Some(ref mut writer) = stream.current_file {
+        writer.flush().ok();
     }
 }
