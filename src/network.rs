@@ -26,7 +26,6 @@ use crate::{
         CanvasResponse,
         ChunkedCanvas,
     },
-    snapshot::canvas_snapshot,
 };
 
 
@@ -1285,7 +1284,7 @@ pub async fn build_node(
 fn inbound_canvas_system(
     mut world_canvas: ResMut<ChunkedCanvas>,
     net: Res<BevyPlaceNodeHandle>,
-    config: Res<BevyPlaceConfig>,
+    _config: Res<BevyPlaceConfig>,
 ) {
     let mut received_canvas = false;
     while let Ok(canvas) = net.inbound_canvas_rx.try_recv() {
@@ -1294,7 +1293,10 @@ fn inbound_canvas_system(
     }
 
     if received_canvas {
-        canvas_snapshot(&world_canvas, &config);
+        debug!("canvas updated from network");
+
+        #[cfg(feature = "native")]
+        crate::snapshot::canvas_snapshot(&world_canvas, &_config);
     }
 }
 

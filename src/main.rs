@@ -114,9 +114,11 @@ async fn run_app_async() -> Result<(), Box<dyn Error>> {
     app.insert_resource(ChunkedCanvas::new());
     app.insert_resource(node_handle);
 
+    #[cfg(feature = "native")]
     app.add_plugins(SnapshotPlugin {
         snapshot_interval: args.snapshot_interval_seconds.map(std::time::Duration::from_secs),
     });
+
     app.add_plugins(SwarmPlugin);
 
     app.run();

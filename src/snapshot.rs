@@ -54,28 +54,25 @@ pub fn canvas_snapshot(
     config: &BevyPlaceConfig,
 ) {
     // TODO: implement S3 artifact output
-    #[cfg(feature = "native")]
-    {
-        if let Some(artifact_folder) = config.artifact_folder.as_ref() {
-            if !std::fs::exists(&artifact_folder).ok().unwrap_or(false) {
-                info!("creating artifact folder {:?}", artifact_folder);
-                std::fs::create_dir(&artifact_folder).ok();
-            }
-
-            let timestamp = epoch_time_seconds();
-            let path = std::path::Path::new(artifact_folder)
-                .join(format!("{timestamp}.png"));
-
-            let image = world_canvas.to_image();
-            image::save_buffer(
-                &path,
-                &image.data,
-                image.width(),
-                image.height(),
-                image::ColorType::Rgba8,
-            ).ok();
-
-            info!("snapshot saved to {:?}", std::fs::canonicalize(path).ok());
+    if let Some(artifact_folder) = config.artifact_folder.as_ref() {
+        if !std::fs::exists(artifact_folder).ok().unwrap_or(false) {
+            info!("creating artifact folder {:?}", artifact_folder);
+            std::fs::create_dir(artifact_folder).ok();
         }
+
+        let timestamp = epoch_time_seconds();
+        let path = std::path::Path::new(artifact_folder)
+            .join(format!("{timestamp}.png"));
+
+        let image = world_canvas.to_image();
+        image::save_buffer(
+            &path,
+            &image.data,
+            image.width(),
+            image.height(),
+            image::ColorType::Rgba8,
+        ).ok();
+
+        info!("snapshot saved to {:?}", std::fs::canonicalize(path).ok());
     }
 }

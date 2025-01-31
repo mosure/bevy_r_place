@@ -3,8 +3,10 @@ pub mod chunk_crdt;
 pub mod color_picker;
 pub mod headless;
 pub mod network;
-pub mod snapshot;
 pub mod time;
+
+#[cfg(feature = "native")]
+pub mod snapshot;
 
 #[cfg(feature = "viewer")]
 pub mod viewer;
@@ -32,6 +34,8 @@ pub mod prelude {
         PixelUpdateMsg,
         SwarmPlugin,
     };
+
+    #[cfg(feature = "native")]
     pub use crate::snapshot::SnapshotPlugin;
 
     #[cfg(feature = "viewer")]
