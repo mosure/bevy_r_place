@@ -133,6 +133,45 @@ impl ChunkedCanvas {
             RenderAssetUsages::default(),
         )
     }
+
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        // Verify that the provided bytes have the expected length.
+        assert_eq!(
+            bytes.len(),
+            (WORLD_WIDTH * WORLD_HEIGHT * 4) as usize,
+            "unexpected byte slice length"
+        );
+
+        let mut chunks = HashMap::new();
+        let num_chunks_x = WORLD_WIDTH / CHUNK_SIZE;
+        let num_chunks_y = WORLD_HEIGHT / CHUNK_SIZE;
+
+        for cy in 0..num_chunks_y {
+            for cx in 0..num_chunks_x {
+                let mut pixels = Vec::with_capacity((CHUNK_SIZE * CHUNK_SIZE) as usize);
+                for y in 0..CHUNK_SIZE {
+                    for x in 0..CHUNK_SIZE {
+                        let wx = cx * CHUNK_SIZE + x;
+                        let wy = cy * CHUNK_SIZE + y;
+                        let index = ((wy * WORLD_WIDTH + wx) * 4) as usize;
+                        let r = bytes[index];
+                        let g = bytes[index + 1];
+                        let b = bytes[index + 2];
+                        pixels.push(Pixel {
+                            r,
+                            g,
+                            b,
+                            ..Default::default()
+                        });
+                    }
+                }
+
+                let chunk = Chunk { pixels };
+                chunks.insert((cx, cy), chunk);
+            }
+        }
+        Self { chunks }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

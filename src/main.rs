@@ -62,6 +62,18 @@ async fn run_app_async() -> Result<(), Box<dyn Error>> {
     #[cfg(not(feature = "aws"))]
     let webrtc_pem_certificate = None;
 
+
+    let mut app = App::new();
+
+    #[cfg(feature = "native")]
+    let canvas = bevy_r_place::snapshot::recover_latest_snapshot(&args).await.expect("failed to insert canvas");
+
+    #[cfg(not(feature = "native"))]
+    let canvas = ChunkedCanvas::new();
+
+    app.insert_resource(canvas);
+
+
     let (node, node_handle) = build_node(
         BevyPlaceNodeConfig {
             addr: args.address.parse()?,
@@ -95,8 +107,6 @@ async fn run_app_async() -> Result<(), Box<dyn Error>> {
         });
     }
 
-    let mut app = App::new();
-
     let headless = args.headless;
 
     #[cfg(not(feature = "viewer"))]
@@ -111,7 +121,6 @@ async fn run_app_async() -> Result<(), Box<dyn Error>> {
 
     app.add_plugins(BevyArgsPlugin::<BevyPlaceConfig>::default());
 
-    app.insert_resource(ChunkedCanvas::new());
     app.insert_resource(node_handle);
 
     #[cfg(feature = "native")]
@@ -177,30 +186,39 @@ pub mod aws {
         http::StatusCode,
         Router,
     };
+    use base64::{
+        engine::general_purpose::STANDARD as BASE64_STANDARD,
+        Engine,
+    };
+
 
     pub async fn webrtc_pem_certificate() -> Option<String> {
-        let secret_name = "/bevy_r_place/certs/webrtc_pem";
+        let secret_name = "bevy_r_place";
         let region = Region::new("us-west-2");
 
         let config = aws_config::defaults(BehaviorVersion::v2024_03_28())
             .region(region)
             .load()
             .await;
+        let client = aws_sdk_secretsmanager::Client::new(&config);
 
-        let asm = aws_sdk_secretsmanager::Client::new(&config);
-
-        let response = asm
+        let response = client
             .get_secret_value()
             .secret_id(secret_name)
             .send()
-            .await;
+            .await
+            .ok()?;
 
-        if let Err(err) = response {
-            super::log(&format!("failed to get secret: {:?}", err));
-            None
-        } else {
-            response.unwrap().secret_string().map(String::from)
-        }
+        let secret_string = response.secret_string()?;
+
+        let secret_json: serde_json::Value = serde_json::from_str(secret_string).ok()?;
+        let base64 = secret_json
+            .get("/bevy_r_place/certs/webrtc_pem")?
+            .as_str()
+            .map(String::from);
+
+        let decoded_bytes = BASE64_STANDARD.decode(base64?.as_bytes()).ok()?;
+        String::from_utf8(decoded_bytes).ok()
     }
 
     pub async fn http_health_check(

@@ -31,4 +31,11 @@ EXPOSE 4205/udp
 # HTTP /health endpoint
 EXPOSE 4206
 
-CMD ["/app/bevy_r_place_viewer",  "--bootstrap", "--headless"]
+CMD [
+    "/app/bevy_r_place_viewer",
+    "--bootstrap",
+    "--headless",
+    "--snapshot-interval-seconds", "300",
+    "--pixel-artifact-stream-chunk-mb", "1",
+    "--artifact-s3-bucket", "bevy-r-place-artifact",
+]
