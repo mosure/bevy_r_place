@@ -34,7 +34,6 @@ default-run = "viewer"
 
 [features]
 default = [
-  "aws",
   "native",
   "viewer",
 ]
